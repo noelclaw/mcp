@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find \"c:\\\\\\\\Users\\\\\\\\sagir\\\\\\\\Downloads\\\\\\\\noelapp\\\\\\\\mcp-server\" -maxdepth 2 -type f ! -path \"*/node_modules/*\")"
+    ]
+  }
+}
