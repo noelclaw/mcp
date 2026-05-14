@@ -348,21 +348,35 @@ const TOOLS: Tool[] = [
   {
     name: "deploy_token",
     description:
-      "Deploy a new memecoin on Base via Flaunch. Creates an ERC-20 with a Flaunch liquidity pool. Requires FLAUNCH_API_KEY to be configured.",
+      "Deploy a new memecoin on Base via Bankr AI (uses Flaunch or Clanker automatically). Use upload_image first to prepare your token image. Bankr handles IPFS upload and contract deployment — no wallet setup needed.",
     inputSchema: {
       type: "object",
       properties: {
-        userId: { type: "string", description: "Your user ID" },
         name: { type: "string", description: "Full token name, e.g. 'Moon Cat Token'" },
         symbol: { type: "string", description: "Token symbol, e.g. 'MCAT'" },
-        description: { type: "string", description: "Short description (optional)" },
-        imageUrl: { type: "string", description: "URL to token logo image (optional)" },
+        description: { type: "string", description: "Short description of the token (optional)" },
+        imageUrl: { type: "string", description: "Cloudinary or public image URL from upload_image (optional)" },
         initialBuyEth: {
           type: "string",
-          description: "Initial ETH to buy on deploy in wei (optional, e.g. '10000000000000000' = 0.01 ETH)",
+          description: "Initial ETH amount to buy on deploy, e.g. '0.01' (optional)",
         },
+        userId: { type: "string", description: "Optional user ID for tracking" },
       },
-      required: ["userId", "name", "symbol"],
+      required: ["name", "symbol"],
+    },
+  },
+  {
+    name: "upload_image",
+    description:
+      "Upload an image for token deployment. Accepts a public image URL or base64-encoded image. Returns an optimized Cloudinary URL ready to use as imageUrl in deploy_token.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        imageUrl: { type: "string", description: "Public image URL to upload to Cloudinary" },
+        imageBase64: { type: "string", description: "Base64-encoded image (without the data:... prefix)" },
+        fileName: { type: "string", description: "Optional filename/public_id for the uploaded image" },
+      },
+      required: [],
     },
   },
   {
@@ -380,7 +394,7 @@ const TOOLS: Tool[] = [
 ];
 
 const server = new Server(
-  { name: "noelclaw", version: "1.3.1" },
+  { name: "noelclaw", version: "1.3.2" },
   { capabilities: { tools: {} } }
 );
 
@@ -835,20 +849,39 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "deploy_token": {
-        const a = args as { userId: string; name: string; symbol: string; description?: string; imageUrl?: string; initialBuyEth?: string };
+        const a = (args ?? {}) as { name: string; symbol: string; description?: string; imageUrl?: string; initialBuyEth?: string; userId?: string };
         const data = await callConvex("/mcp/defi/deploy", "POST", a);
-        if (data.error === "NO_WALLET") return { content: [{ type: "text", text: `No wallet found. Run connect_wallet first.` }], isError: true };
         if (data.error) return { content: [{ type: "text", text: `Deploy failed: ${data.error}` }], isError: true };
+        const lines = [
+          `🚀 Token deploy initiated on Base!`,
+          `**Name:** ${a.name} (${a.symbol.toUpperCase()})`,
+        ];
+        if (data.contractAddress) {
+          lines.push(`**Contract:** \`${data.contractAddress}\``);
+          lines.push(`Basescan: https://basescan.org/address/${data.contractAddress}`);
+          lines.push(`Flaunch: https://flaunch.gg/base/token/${data.contractAddress}`);
+        }
+        if (data.txHash) lines.push(`**Tx Hash:** \`${data.txHash}\``);
+        if (data.bankrResponse) lines.push(``, `**Bankr:** ${data.bankrResponse}`);
+        return { content: [{ type: "text", text: lines.join("\n") }] };
+      }
+
+      case "upload_image": {
+        const a = (args ?? {}) as { imageUrl?: string; imageBase64?: string; fileName?: string };
+        if (!a.imageUrl && !a.imageBase64) {
+          return { content: [{ type: "text", text: `Provide imageUrl or imageBase64.` }], isError: true };
+        }
+        const data = await callConvex("/mcp/image/upload", "POST", a);
+        if (data.error) return { content: [{ type: "text", text: `Upload failed: ${data.error}${data.detail ? ` — ${data.detail}` : ""}` }], isError: true };
         return {
           content: [{
             type: "text",
             text: [
-              `🚀 Token deployed on Base!`,
-              `**Name:** ${a.name} (${a.symbol.toUpperCase()})`,
-              `**Contract:** \`${data.contractAddress}\``,
-              `**Tx Hash:** \`${data.txHash}\``,
-              `Basescan: https://basescan.org/tx/${data.txHash}`,
-              `Flaunch: https://flaunch.gg/base/token/${data.contractAddress}`,
+              `✅ Image uploaded to Cloudinary!`,
+              `**URL:** ${data.cloudinaryUrl}`,
+              `**Public ID:** ${data.publicId}`,
+              ``,
+              `Pass this URL as imageUrl in deploy_token.`,
             ].join("\n"),
           }],
         };
