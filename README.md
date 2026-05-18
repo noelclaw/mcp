@@ -265,6 +265,69 @@ Or set it in your MCP config's `env`:
 
 ---
 
+## x402 Micropayments (v1.7.0)
+
+Most tools require either a **Noelclaw session token** or a **USDC micropayment** on Base mainnet. Free tools (market data, signals, whale alerts, recap) pass through without auth.
+
+### Option A — Session token (recommended)
+
+Get your session token from noelclaw.xyz → Settings → API. Set it in your MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "noelclaw": {
+      "command": "npx",
+      "args": ["@noelclaw/research"],
+      "env": {
+        "NOELCLAW_SESSION_TOKEN": "your-session-token"
+      }
+    }
+  }
+}
+```
+
+### Option B — Per-call USDC payment
+
+1. Call any paid tool — you'll get a 402 response with the amount, wallet address, and request ID
+2. Send the exact USDC amount to the wallet on Base mainnet
+3. Copy your transaction hash and build the payment header:
+   ```
+   base64("<txHash>:<requestId>")
+   ```
+4. Set `NOELCLAW_PAYMENT_HEADER` in your MCP config env and retry
+
+```json
+{
+  "env": {
+    "NOELCLAW_PAYMENT_HEADER": "<base64(txHash:requestId)>"
+  }
+}
+```
+
+Each payment header is single-use. Clear `NOELCLAW_PAYMENT_HEADER` after the tool call succeeds.
+
+### Tool prices
+
+| Tool | USDC |
+|------|------|
+| `get_market_data`, `get_latest_signal`, `get_signal_history`, `get_smart_money_alerts`, `get_daily_recap` | Free |
+| `get_token_data`, `get_portfolio`, `create_automation` | $0.05 |
+| `research`, `ask_noel`, `start_swarm` | $0.10 |
+| `list_automations`, `pause_automation`, `delete_automation`, `set_telegram`, `stop_swarm`, swarm reads | $0.01 |
+| `swap_tokens`, `send_token` | $0.25 |
+
+### Convex env vars (self-hosted deployments only)
+
+| Var | Description |
+|-----|-------------|
+| `NOEL_WALLET_ADDRESS` | Your wallet address to receive USDC payments |
+| `BASE_RPC_URL` | Optional Base mainnet RPC (defaults to `https://mainnet.base.org`) |
+
+Set via `npx convex env set NOEL_WALLET_ADDRESS "0x..."` in your Convex project.
+
+---
+
 ## Troubleshooting
 
 | Error | Fix |
@@ -277,6 +340,10 @@ Or set it in your MCP config's `env`:
 | Swarm not starting | Make sure Convex is deployed with the swarm files (`swarm.ts`, `swarmCoordinator.ts`, `swarmDb.ts`) |
 | `get_swarm_status` returns empty | Start the swarm first with `start_swarm` |
 | High token usage in swarm | Enable BYOK in your user settings to use your own Bankr API key |
+| `Payment required` on every call | Set `NOELCLAW_SESSION_TOKEN` in your MCP config env (get it from noelclaw.xyz → Settings → API) |
+| `Payment already used` error | Each `NOELCLAW_PAYMENT_HEADER` is single-use — clear it after a successful call |
+| `No matching USDC transfer found` | Make sure you sent to the exact address and amount shown in the 402 response |
+| `NOEL_WALLET_ADDRESS not configured` | Self-hosted only — set via `npx convex env set NOEL_WALLET_ADDRESS "0x..."` |
 
 ---
 

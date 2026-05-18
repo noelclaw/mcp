@@ -6,8 +6,52 @@ import {
   ListToolsRequestSchema,
   Tool,
 } from "@modelcontextprotocol/sdk/types.js";
+import { ethers } from "ethers";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+import * as crypto from "crypto";
 
 const CONVEX_SITE = process.env.NOELCLAW_CONVEX_URL ?? "https://valuable-fish-533.convex.site";
+
+const WALLET_DIR = path.join(os.homedir(), ".noelclaw");
+const WALLET_FILE = path.join(WALLET_DIR, "wallet.json");
+let _cachedWallet: ethers.Wallet | ethers.HDNodeWallet | null = null;
+
+function getMachineKey(): string {
+  return crypto
+    .createHash("sha256")
+    .update(os.hostname() + os.platform() + os.arch())
+    .digest("hex")
+    .slice(0, 32);
+}
+
+async function getOrCreateWallet(): Promise<ethers.Wallet | ethers.HDNodeWallet> {
+  if (_cachedWallet) return _cachedWallet;
+  if (fs.existsSync(WALLET_FILE)) {
+    try {
+      const encrypted = fs.readFileSync(WALLET_FILE, "utf8");
+      const wallet = await ethers.Wallet.fromEncryptedJson(encrypted, getMachineKey());
+      _cachedWallet = wallet;
+      return wallet;
+    } catch {
+      // fall through to create new wallet
+    }
+  }
+  const wallet = ethers.Wallet.createRandom();
+  if (!fs.existsSync(WALLET_DIR)) fs.mkdirSync(WALLET_DIR, { recursive: true });
+  const encrypted = await wallet.encrypt(getMachineKey());
+  fs.writeFileSync(WALLET_FILE, encrypted, { mode: 0o600 });
+  _cachedWallet = wallet;
+  return wallet;
+}
+
+async function signRequest(toolName: string): Promise<{ address: string; signature: string; timestamp: string }> {
+  const wallet = await getOrCreateWallet();
+  const timestamp = Date.now().toString();
+  const signature = await wallet.signMessage(`noelclaw:${toolName}:${timestamp}`);
+  return { address: wallet.address, signature, timestamp };
+}
 
 const PRIVATE_KEY_RESPONSE = {
   content: [{
@@ -21,21 +65,90 @@ function containsSensitiveRequest(args: unknown): boolean {
   return text.includes("private key") || text.includes("seed phrase") || text.includes("mnemonic") || text.includes("privatekey");
 }
 
-async function callConvex(path: string, method: string, body?: unknown): Promise<any> {
+class PaymentRequiredError extends Error {
+  readonly details: unknown;
+  constructor(details: unknown) {
+    super("Payment required");
+    this.name = "PaymentRequiredError";
+    this.details = details;
+  }
+}
+
+export function buildPaymentHeader(txHash: string, requestId: string): string {
+  return Buffer.from(`${txHash}:${requestId}`).toString("base64");
+}
+
+async function callConvex(path: string, method: string, body?: unknown, toolName = "unknown"): Promise<any> {
   const url = `${CONVEX_SITE}${path}`;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+  const apiKey = process.env.NOELCLAW_API_KEY;
+  const sessionToken = process.env.NOELCLAW_SESSION_TOKEN;
+  const authHeader = apiKey
+    ? `Bearer ${apiKey}`
+    : sessionToken
+    ? `Bearer ${sessionToken}`
+    : null;
+  if (authHeader) {
+    headers["Authorization"] = authHeader;
+  } else {
+    try {
+      const { address, signature, timestamp } = await signRequest(toolName);
+      headers["X-Wallet-Address"] = address;
+      headers["X-Wallet-Signature"] = signature;
+      headers["X-Wallet-Timestamp"] = timestamp;
+    } catch {
+      // continue without wallet headers — server will respond with 401/402
+    }
+  }
+
+  const paymentHeader = process.env.NOELCLAW_PAYMENT_HEADER;
+  if (paymentHeader) headers["X-Payment"] = paymentHeader;
+
   const res = await fetch(url, {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(30000),
   });
+
+  if (res.status === 402) {
+    const body = await res.json().catch(() => ({})) as {
+      tool?: string;
+      price?: { amount: number; currency: string };
+      payTo?: string;
+      memo?: string;
+    };
+    throw new Error(
+      `💳 This tool requires payment or an API key.\n\n` +
+      `Option 1 (recommended): Get a free API key at noelclaw.com → Settings → API Keys\n` +
+      `Then set: NOELCLAW_API_KEY=noel_sk_xxx\n\n` +
+      `Option 2 (pay per call): Send ${body.price?.amount || "?"} ${body.price?.currency || "USDC"} on Base to:\n` +
+      `${body.payTo || "Address not available"}\n` +
+      `Memo: ${body.memo || "See response for memo"}\n` +
+      `Then retry with X-PAYMENT header.`
+    );
+  }
+
+  if (res.status === 401) {
+    const body = await res.json().catch(() => ({})) as {
+      message?: string; url?: string; hint?: string; alternative?: string;
+    };
+    throw new Error(
+      `🔑 ${body.message || "Authentication required"}\n\n` +
+      `→ Get your API key: ${body.url || "https://noelclaw.com"}\n\n` +
+      `Hint: ${body.hint || "Set NOELCLAW_API_KEY=noel_sk_xxx in your MCP config"}\n\n` +
+      `${body.alternative ? `Alternative: ${body.alternative}` : ""}`
+    );
+  }
+
   if (!res.ok) throw new Error(`Noelclaw API error: ${res.status} ${await res.text()}`);
   return res.json() as Promise<any>;
 }
 
 async function notifyTelegram(userId: string, message: string): Promise<{ sent: boolean; reason?: string }> {
   try {
-    return await callConvex("/user/telegram/notify", "POST", { userId, message });
+    return await callConvex("/user/telegram/notify", "POST", { userId, message }, "set_telegram");
   } catch {
     return { sent: false, reason: "error" };
   }
@@ -55,10 +168,6 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        userId: {
-          type: "string",
-          description: "Your user ID — results will be sent to your Telegram bot if configured",
-        },
         token: {
           type: "string",
           description: "Optional: specific token to focus on, e.g. 'BTC', 'ETH'",
@@ -77,10 +186,6 @@ const TOOLS: Tool[] = [
         question: {
           type: "string",
           description: "Describe which tokens to look up, e.g. 'show me data for ETH, SOL, and ARB'",
-        },
-        userId: {
-          type: "string",
-          description: "Your user ID — results will be sent to your Telegram bot if configured",
         },
       },
       required: ["question"],
@@ -152,10 +257,6 @@ const TOOLS: Tool[] = [
           type: "string",
           description: "Topic to research, e.g. 'Ethereum ETF approval impact', 'What is happening with SOL?', 'Latest news on Base ecosystem'",
         },
-        userId: {
-          type: "string",
-          description: "Your user ID — results will be sent to your Telegram bot if configured",
-        },
       },
       required: ["query"],
     },
@@ -166,10 +267,8 @@ const TOOLS: Tool[] = [
       "Get your Base wallet address and full token portfolio including all token balances with USD values. Auto-creates a secure encrypted wallet on first use.",
     inputSchema: {
       type: "object",
-      properties: {
-        userId: { type: "string", description: "Your user ID" },
-      },
-      required: ["userId"],
+      properties: {},
+      required: [],
     },
   },
   {
@@ -179,7 +278,6 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        userId: { type: "string", description: "Your user ID" },
         fromToken: { type: "string", description: "Token to sell: ETH, USDC, USDT, DAI, WETH" },
         toToken: { type: "string", description: "Token to buy: ETH, USDC, USDT, DAI, WETH" },
         amount: {
@@ -187,7 +285,7 @@ const TOOLS: Tool[] = [
           description: "Amount in smallest unit (e.g. '1000000' = 1 USDC, '1000000000000000000' = 1 ETH)",
         },
       },
-      required: ["userId", "fromToken", "toToken", "amount"],
+      required: ["fromToken", "toToken", "amount"],
     },
   },
   {
@@ -196,12 +294,11 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        userId: { type: "string", description: "Your user ID" },
         token: { type: "string", description: "Token to send: ETH, USDC, USDT, DAI, WETH" },
         toAddress: { type: "string", description: "Destination address (0x...)" },
         amount: { type: "string", description: "Amount in smallest unit" },
       },
-      required: ["userId", "token", "toAddress", "amount"],
+      required: ["token", "toAddress", "amount"],
     },
   },
   {
@@ -227,10 +324,6 @@ const TOOLS: Tool[] = [
             required: ["role", "content"],
           },
         },
-        userId: {
-          type: "string",
-          description: "Your user ID — the answer will be sent to your Telegram bot if configured",
-        },
       },
       required: ["question"],
     },
@@ -242,10 +335,9 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        userId: { type: "string", description: "Your user ID — the wallet that will execute the automation" },
         rawInput: { type: "string", description: "Plain English description of the automation" },
       },
-      required: ["userId", "rawInput"],
+      required: ["rawInput"],
     },
   },
   {
@@ -253,10 +345,8 @@ const TOOLS: Tool[] = [
     description: "List all your automations — active, paused, and completed — with status, run counts, and next scheduled run.",
     inputSchema: {
       type: "object",
-      properties: {
-        userId: { type: "string", description: "Your user ID" },
-      },
-      required: ["userId"],
+      properties: {},
+      required: [],
     },
   },
   {
@@ -265,10 +355,9 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        userId: { type: "string", description: "Your user ID" },
         automationId: { type: "string", description: "Automation ID (from list_automations)" },
       },
-      required: ["userId", "automationId"],
+      required: ["automationId"],
     },
   },
   {
@@ -277,10 +366,9 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        userId: { type: "string", description: "Your user ID" },
         automationId: { type: "string", description: "Automation ID (from list_automations)" },
       },
-      required: ["userId", "automationId"],
+      required: ["automationId"],
     },
   },
   {
@@ -290,7 +378,6 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        userId: { type: "string", description: "Your user ID" },
         config: {
           type: "object",
           description: "Optional swarm config",
@@ -304,7 +391,7 @@ const TOOLS: Tool[] = [
           },
         },
       },
-      required: ["userId"],
+      required: [],
     },
   },
   {
@@ -312,10 +399,8 @@ const TOOLS: Tool[] = [
     description: "Stop the active swarm session for a user.",
     inputSchema: {
       type: "object",
-      properties: {
-        userId: { type: "string", description: "Your user ID" },
-      },
-      required: ["userId"],
+      properties: {},
+      required: [],
     },
   },
   {
@@ -324,10 +409,8 @@ const TOOLS: Tool[] = [
       "Get the current status of the swarm: active agents, shared memory snapshot, execution scores, and recent runs.",
     inputSchema: {
       type: "object",
-      properties: {
-        userId: { type: "string", description: "Your user ID" },
-      },
-      required: ["userId"],
+      properties: {},
+      required: [],
     },
   },
   {
@@ -337,13 +420,12 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        userId: { type: "string", description: "Your user ID" },
         agentId: { type: "string", description: "ID of the agent writing this memory entry" },
         key: { type: "string", description: "Memory key (e.g. 'last_signal', 'btc_sentiment')" },
         value: { type: "string", description: "Value to store (JSON-serializable string)" },
         ttlSeconds: { type: "number", description: "Optional TTL in seconds — entry is auto-deleted after this" },
       },
-      required: ["userId", "agentId", "key", "value"],
+      required: ["agentId", "key", "value"],
     },
   },
   {
@@ -352,10 +434,9 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        userId: { type: "string", description: "Your user ID" },
         key: { type: "string", description: "Memory key to read" },
       },
-      required: ["userId", "key"],
+      required: ["key"],
     },
   },
   {
@@ -364,33 +445,8 @@ const TOOLS: Tool[] = [
       "Get the self-improvement scores for all skills. Shows which workflows are performing best, success/fail rates, and adapted thresholds.",
     inputSchema: {
       type: "object",
-      properties: {
-        userId: { type: "string", description: "Your user ID" },
-      },
-      required: ["userId"],
-    },
-  },
-  {
-    name: "set_telegram",
-    description:
-      "Configure your personal Telegram bot token and chat ID for Noel notifications — signals, whale alerts, research reports, and market data.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        userId: {
-          type: "string",
-          description: "User ID to configure Telegram for",
-        },
-        telegramBotToken: {
-          type: "string",
-          description: "Telegram bot token (get from @BotFather)",
-        },
-        telegramChatId: {
-          type: "string",
-          description: "Telegram chat ID to send messages to",
-        },
-      },
-      required: ["userId"],
+      properties: {},
+      required: [],
     },
   },
 ];
@@ -410,9 +466,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case "get_market_data": {
-        const a = (args ?? {}) as { userId?: string; token?: string };
+        const a = (args ?? {}) as { token?: string };
         const tokenQ = a.token ? `?token=${encodeURIComponent(a.token)}` : "";
-        const data = await callConvex(`/mcp/market${tokenQ}`, "GET");
+        const data = await callConvex(`/mcp/market${tokenQ}`, "GET", undefined, "get_market_data");
         const lines: string[] = [`**Market Data** — ${data.fetchedAt ?? new Date().toISOString()}`, ""];
 
         if (data.keyPrices) {
@@ -448,32 +504,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
 
-        let text = lines.join("\n");
-        if (a.userId) {
-          const tgMsg = `📊 Market Data — ${data.fetchedAt ?? new Date().toISOString()}\n\n` +
-            lines.filter((l) => !l.startsWith("|") && !l.startsWith("**Top")).join("\n").slice(0, 3800) +
-            "\n\n— via Noelclaw";
-          const notif = await notifyTelegram(a.userId, tgMsg);
-          if (!notif.sent && notif.reason === "no_config") text += TELEGRAM_SETUP_HINT;
-          else if (notif.sent) text += "\n\n✅ _Sent to your Telegram._";
-        }
+        const text = lines.join("\n");
         return { content: [{ type: "text", text }] };
       }
 
       case "get_token_data": {
-        const a = args as { question: string; userId?: string };
+        const a = args as { question: string };
         const data = await callConvex("/mcp/chat", "POST", {
           question: a.question,
           agentId: "coingecko-default",
           messages: [],
-        });
-        let answer = data.answer ?? JSON.stringify(data);
-        if (a.userId) {
-          const tgMsg = `🔍 Token Data:\n\n${answer}`.slice(0, 4000) + "\n\n— via Noelclaw";
-          const notif = await notifyTelegram(a.userId, tgMsg);
-          if (!notif.sent && notif.reason === "no_config") answer += TELEGRAM_SETUP_HINT;
-          else if (notif.sent) answer += "\n\n✅ _Sent to your Telegram._";
-        }
+        }, "get_token_data");
+        const answer = data.answer ?? JSON.stringify(data);
         return { content: [{ type: "text", text: answer }] };
       }
 
@@ -482,7 +524,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const tokenParam = a.token?.toUpperCase() ?? "both";
         const data = await callConvex(
           `/signals/latest${tokenParam !== "BOTH" && tokenParam !== "both" ? `?token=${encodeURIComponent(tokenParam)}` : ""}`,
-          "GET"
+          "GET", undefined, "get_latest_signal"
         );
         const lines: string[] = ["**Latest Noel Signals**", ""];
         for (const [tok, sig] of Object.entries(data as Record<string, any>)) {
@@ -504,8 +546,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const token = a.token?.toUpperCase() ?? "BTC";
         const days = a.days ?? 7;
         const [hist, wr] = await Promise.all([
-          callConvex(`/signals/history?token=${token}&days=${days}`, "GET"),
-          callConvex(`/signals/winrate?token=${token}&days=${days}`, "GET"),
+          callConvex(`/signals/history?token=${token}&days=${days}`, "GET", undefined, "get_signal_history"),
+          callConvex(`/signals/winrate?token=${token}&days=${days}`, "GET", undefined, "get_signal_history"),
         ]);
         const lines: string[] = [
           `**${token} Signal History — Last ${days} days**`,
@@ -527,7 +569,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "get_smart_money_alerts": {
         const a = (args ?? {}) as { hours?: number };
         const hours = a.hours ?? 24;
-        const data = await callConvex(`/whales/latest?hours=${hours}`, "GET");
+        const data = await callConvex(`/whales/latest?hours=${hours}`, "GET", undefined, "get_smart_money_alerts");
         if (!data.count) return { content: [{ type: "text", text: `No whale alerts in the last ${hours}h.` }] };
         const lines: string[] = [`**Whale Alerts — Last ${hours}h** (${data.count} total)`, ""];
         for (const alert of (data.alerts ?? []).slice(0, 5)) {
@@ -547,7 +589,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const date = a.date ?? new Date().toISOString().slice(0, 10);
         let data: any;
         try {
-          data = await callConvex("/recap/today", "GET");
+          data = await callConvex("/recap/today", "GET", undefined, "get_daily_recap");
         } catch {
           return { content: [{ type: "text", text: `No recap available for ${date}` }] };
         }
@@ -570,24 +612,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "research": {
-        const a = args as { query: string; userId?: string };
-        const data = await callConvex("/mcp/research", "POST", { query: a.query });
+        const a = args as { query: string };
+        const data = await callConvex("/mcp/research", "POST", { query: a.query }, "research");
         if (!data.success) {
           return { content: [{ type: "text", text: `Research failed: ${data.error ?? "unknown error"}` }] };
         }
-        let text = data.text ?? "No results returned.";
-        if (a.userId) {
-          const tgMsg = `🔍 Research: ${a.query}\n\n${text}`.slice(0, 4000) + "\n\n— via Noelclaw";
-          const notif = await notifyTelegram(a.userId, tgMsg);
-          if (!notif.sent && notif.reason === "no_config") text += TELEGRAM_SETUP_HINT;
-          else if (notif.sent) text += "\n\n✅ _Sent to your Telegram._";
-        }
+        const text = data.text ?? "No results returned.";
         return { content: [{ type: "text", text }] };
       }
 
       case "get_portfolio": {
-        const a = args as { userId: string };
-        const data = await callConvex(`/mcp/defi/portfolio?userId=${encodeURIComponent(a.userId)}`, "GET");
+        const data = await callConvex("/mcp/defi/portfolio", "GET", undefined, "get_portfolio");
         if (data.error) return { content: [{ type: "text", text: `Portfolio error: ${data.error}` }], isError: true };
         const lines = [
           `**Portfolio — Base Mainnet**`,
@@ -603,8 +638,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "swap_tokens": {
-        const a = args as { userId: string; fromToken: string; toToken: string; amount: string };
-        const data = await callConvex("/mcp/defi/swap", "POST", a);
+        const a = args as { fromToken: string; toToken: string; amount: string };
+        const data = await callConvex("/mcp/defi/swap", "POST", a, "swap_tokens");
         if (data.error) return { content: [{ type: "text", text: `Swap failed: ${data.error}` }], isError: true };
         return {
           content: [{
@@ -621,8 +656,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "send_token": {
-        const a = args as { userId: string; token: string; toAddress: string; amount: string };
-        const data = await callConvex("/mcp/defi/send", "POST", a);
+        const a = args as { token: string; toAddress: string; amount: string };
+        const data = await callConvex("/mcp/defi/send", "POST", a, "send_token");
         if (data.error) return { content: [{ type: "text", text: `Send failed: ${data.error}` }], isError: true };
         return {
           content: [{
@@ -639,28 +674,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "ask_noel": {
-        const a = args as { question: string; messages?: unknown[]; userId?: string };
+        const a = args as { question: string; messages?: unknown[] };
         const data = await callConvex("/mcp/chat", "POST", {
           question: a.question,
           agentId: "noel-default",
           messages: a.messages ?? [],
-        });
-        let answer = data.answer ?? JSON.stringify(data);
-        if (a.userId) {
-          const tgMsg = `🤖 Noel:\n\n${answer}`.slice(0, 4000) + "\n\n— via Noelclaw";
-          const notif = await notifyTelegram(a.userId, tgMsg);
-          if (!notif.sent && notif.reason === "no_config") answer += TELEGRAM_SETUP_HINT;
-          else if (notif.sent) answer += "\n\n✅ _Sent to your Telegram._";
-        }
+        }, "ask_noel");
+        const answer = data.answer ?? JSON.stringify(data);
         return { content: [{ type: "text", text: answer }] };
       }
 
       case "create_automation": {
-        const a = args as { userId: string; rawInput: string };
-        const data = await callConvex("/automations/create", "POST", {
-          userId: a.userId,
-          rawInput: a.rawInput,
-        });
+        const a = args as { rawInput: string };
+        const data = await callConvex("/automations/create", "POST", { rawInput: a.rawInput }, "create_automation");
         if (!data.success) {
           return { content: [{ type: "text", text: `Failed: ${data.error}` }], isError: true };
         }
@@ -693,8 +719,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "list_automations": {
-        const a = args as { userId: string };
-        const data = await callConvex(`/automations/list?userId=${encodeURIComponent(a.userId)}`, "GET");
+        const data = await callConvex("/automations/list", "GET", undefined, "list_automations");
         if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
 
         const automations: any[] = data.automations ?? [];
@@ -718,29 +743,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "pause_automation": {
-        const a = args as { userId: string; automationId: string };
+        const a = args as { automationId: string };
         const data = await callConvex("/automations/pause", "POST", {
           automationId: a.automationId,
-          userId: a.userId,
-        });
+        }, "pause_automation");
         if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
         const icon = data.status === "active" ? "▶️ Resumed" : "⏸️ Paused";
         return { content: [{ type: "text", text: `${icon} successfully.` }] };
       }
 
       case "delete_automation": {
-        const a = args as { userId: string; automationId: string };
+        const a = args as { automationId: string };
         const data = await callConvex("/automations/delete", "POST", {
           automationId: a.automationId,
-          userId: a.userId,
-        });
+        }, "delete_automation");
         if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
         return { content: [{ type: "text", text: "🗑️ Automation deleted." }] };
       }
 
       case "start_swarm": {
-        const a = args as { userId: string; config?: { enabledAgents?: string[]; byok?: boolean } };
-        const data = await callConvex("/swarm/start", "POST", { userId: a.userId, config: a.config });
+        const a = (args ?? {}) as { config?: { enabledAgents?: string[]; byok?: boolean } };
+        const data = await callConvex("/swarm/start", "POST", { config: a.config }, "start_swarm");
         if (!data.success) return { content: [{ type: "text", text: `Failed: ${data.error}` }], isError: true };
         const agents: string[] = data.activeAgents ?? [];
         return {
@@ -758,15 +781,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "stop_swarm": {
-        const a = args as { userId: string };
-        const data = await callConvex("/swarm/stop", "POST", { userId: a.userId });
+        const data = await callConvex("/swarm/stop", "POST", {}, "stop_swarm");
         if (!data.success) return { content: [{ type: "text", text: `Failed: ${data.error}` }], isError: true };
         return { content: [{ type: "text", text: `⏹️ Swarm stopped.` }] };
       }
 
       case "get_swarm_status": {
-        const a = args as { userId: string };
-        const data = await callConvex(`/swarm/status?userId=${encodeURIComponent(a.userId)}`, "GET");
+        const data = await callConvex("/swarm/status", "GET", undefined, "get_swarm_status");
         if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
 
         const job = data.job;
@@ -800,10 +821,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "write_swarm_memory": {
-        const a = args as { userId: string; agentId: string; key: string; value: string; ttlSeconds?: number };
+        const a = args as { agentId: string; key: string; value: string; ttlSeconds?: number };
         await callConvex("/swarm/memory/write", "POST", {
-          userId: a.userId, agentId: a.agentId, key: a.key, value: a.value, ttlSeconds: a.ttlSeconds,
-        });
+          agentId: a.agentId, key: a.key, value: a.value, ttlSeconds: a.ttlSeconds,
+        }, "write_swarm_memory");
         return {
           content: [{
             type: "text",
@@ -813,8 +834,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "get_swarm_memory": {
-        const a = args as { userId: string; key: string };
-        const data = await callConvex(`/swarm/memory?userId=${encodeURIComponent(a.userId)}&key=${encodeURIComponent(a.key)}`, "GET");
+        const a = args as { key: string };
+        const data = await callConvex(`/swarm/memory?key=${encodeURIComponent(a.key)}`, "GET", undefined, "get_swarm_memory");
         if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
         if (data.value === null || data.value === undefined) {
           return { content: [{ type: "text", text: `No value found for key: ${a.key}` }] };
@@ -823,8 +844,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "get_execution_scores": {
-        const a = args as { userId: string };
-        const data = await callConvex(`/swarm/scores?userId=${encodeURIComponent(a.userId)}`, "GET");
+        const data = await callConvex("/swarm/scores", "GET", undefined, "get_execution_scores");
         if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
 
         const scores: any[] = data.scores ?? [];
@@ -834,7 +854,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         const sorted = scores.sort((a, b) => b.lastScore - a.lastScore);
         const lines = [
-          `**Execution Scores — ${a.userId}**`,
+          `**Execution Scores**`,
           ``,
           `| Skill | Score | W | L | Avg Duration | Last Adapted |`,
           `|-------|-------|---|---|--------------|--------------|`,
@@ -845,31 +865,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: "text", text: lines.join("\n") }] };
       }
 
-      case "set_telegram": {
-        const a = args as { userId: string; telegramBotToken?: string; telegramChatId?: string };
-        await callConvex("/user/telegram", "POST", {
-          userId: a.userId,
-          telegramBotToken: a.telegramBotToken,
-          telegramChatId: a.telegramChatId,
-        });
-        return {
-          content: [{
-            type: "text",
-            text: [
-              `✅ Telegram config saved for user ${a.userId}.`,
-              a.telegramBotToken ? `Bot token: set` : ``,
-              a.telegramChatId ? `Chat ID: ${a.telegramChatId}` : ``,
-              ``,
-              `Noel will now send research reports, signals, and whale alerts to your Telegram bot.`,
-            ].filter(Boolean).join("\n"),
-          }],
-        };
-      }
-
       default:
         return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
     }
   } catch (err: any) {
+    if (err instanceof PaymentRequiredError) {
+      const d = (err.details as any)?.paymentDetails;
+      const lines = [
+        "⚠️ **Payment Required**",
+        "",
+        "This tool requires a USDC micropayment on Base mainnet.",
+        ...(d ? [
+          ``,
+          `Amount: **${d.amount} USDC**`,
+          `To: \`${d.address}\``,
+          `Request ID: \`${d.requestId}\``,
+          ``,
+          "**To pay:**",
+          `1. Send ${d.amount} USDC to \`${d.address}\` on Base mainnet`,
+          `2. Copy the transaction hash`,
+          `3. Set env var: \`NOELCLAW_PAYMENT_HEADER=${buildPaymentHeader("<txHash>", d.requestId)}\``,
+          `   (replace \`<txHash>\` with the actual transaction hash)`,
+          `4. Retry the tool call`,
+          ``,
+          "**Or bypass with a session token:**",
+          "Set `NOELCLAW_SESSION_TOKEN` with your Noelclaw session token from noelclaw.xyz",
+        ] : []),
+      ];
+      return { content: [{ type: "text", text: lines.join("\n") }], isError: true };
+    }
     return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
   }
 });
@@ -877,6 +901,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  try {
+    const wallet = await getOrCreateWallet();
+    console.error(`[noelclaw] wallet: ${wallet.address}`);
+  } catch (err) {
+    console.error(`[noelclaw] wallet init failed: ${err}`);
+  }
 }
 
 main().catch((err) => {

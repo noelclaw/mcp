@@ -1,6 +1,6 @@
 {
   "name": "@noelclaw/research",
-  "version": "1.7.0",
+  "version": "1.7.4",
   "description": "Noelclaw MCP server — crypto research, live market data, and AI agent tools for Claude, Hermes, Cursor, and any MCP-compatible client",
   "main": "dist/index.js",
   "bin": {
@@ -27,7 +27,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/noelclaw/noelmcp.git"
+    "url": "git+https://github.com/noelclaw/noelmcp.git"
   },
   "homepage": "https://github.com/noelclaw/noelmcp#readme",
   "bugs": {
@@ -41,6 +41,7 @@
   ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "ethers": "^6.16.0",
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {
