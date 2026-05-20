@@ -13,6 +13,7 @@ import * as path from "path";
 import * as crypto from "crypto";
 
 const CONVEX_SITE = process.env.NOELCLAW_CONVEX_URL ?? "https://valuable-fish-533.convex.site";
+const GROK_API_KEY = process.env.GROK_API_KEY || "";
 const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY;
 const BASE_RPC = ALCHEMY_API_KEY
   ? `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`
@@ -753,13 +754,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "get_insight": {
-        const result = await callConvex("/insights/now", "GET", null, "get_insight");
-        return {
-          content: [{
-            type: "text",
-            text: result.insight ?? result.error ?? "Failed to generate insight",
-          }],
-        };
+        if (!GROK_API_KEY) {
+          return { content: [{ type: "text", text: "Add GROK_API_KEY to your MCP config. Get yours free at console.x.ai" }] };
+        }
+        const res = await fetch("https://api.x.ai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${GROK_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: "grok-3-latest",
+            messages: [
+              { role: "system", content: "You are Noel, a crypto and macro analyst with real-time access to X/Twitter." },
+              { role: "user", content: "Give me a briefing of what's happening RIGHT NOW in the world — crypto, macro, geopolitics, tech, AI, anything major. What are people talking about on X today? Be specific with real events, not generic analysis. Under 350 words." },
+            ],
+            max_tokens: 500,
+          }),
+        });
+        const data = await res.json() as any;
+        const insight = data.choices?.[0]?.message?.content || "Failed to get insight";
+        return { content: [{ type: "text", text: insight }] };
       }
 
       case "ask_noel": {
