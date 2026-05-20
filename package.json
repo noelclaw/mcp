@@ -1,6 +1,6 @@
 {
   "name": "@noelclaw/research",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "Noelclaw MCP server — crypto research, live market data, and AI agent tools for Claude, Hermes, Cursor, and any MCP-compatible client",
   "main": "dist/index.js",
   "bin": {
@@ -42,7 +42,8 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "ethers": "^6.16.0",
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
