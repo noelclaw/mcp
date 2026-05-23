@@ -39,7 +39,7 @@ const AskNoelSchema = z.object({
 export async function handleInsightTool(name: string, args: unknown): Promise<ToolResult | null> {
   switch (name) {
     case "get_insight": {
-      const data = await callConvex("/mcp/insight", "GET", undefined, "get_insight");
+      const data = await callConvex("/insights/now", "GET", undefined, "get_insight");
       const insight = data.insight ?? data.text ?? data.choices?.[0]?.message?.content ?? "Failed to get insight";
       return { content: [{ type: "text", text: insight }] };
     }

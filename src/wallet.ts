@@ -14,10 +14,17 @@ const WALLET_DIR = path.join(os.homedir(), ".noelclaw");
 const WALLET_FILE = path.join(WALLET_DIR, "wallet.json");
 let _cachedWallet: ethers.Wallet | ethers.HDNodeWallet | null = null;
 
+export function clearWalletCache(): void { _cachedWallet = null; }
+
 export function getMachineKey(): string {
+  // If a passphrase is set, use it as the primary secret for stronger encryption.
+  // Without it, the key is derived from public machine info only — this is
+  // convenience encryption (prevents casual reads), not security against
+  // an attacker who has read access to both the file and system info.
+  const passphrase = process.env.NOELCLAW_WALLET_PASSPHRASE ?? "";
   return crypto
     .createHash("sha256")
-    .update(os.hostname() + os.platform() + os.arch())
+    .update(passphrase + os.hostname() + os.platform() + os.arch())
     .digest("hex")
     .slice(0, 32);
 }

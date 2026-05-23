@@ -9,6 +9,8 @@ import { AUTOMATION_TOOLS, handleAutomationTool } from "./tools/automation.js";
 import { SWARM_TOOLS, handleSwarmTool } from "./tools/swarm.js";
 import { INSIGHT_TOOLS, handleInsightTool } from "./tools/insight.js";
 import { FRAMEWORK_TOOLS, handleFrameworkTool } from "./tools/framework.js";
+import { WALLET_TOOLS, handleWalletTool } from "./tools/wallet.js";
+import { NEWS_TOOLS, handleNewsTool } from "./tools/news.js";
 
 const PRIVATE_KEY_RESPONSE = {
   content: [{
@@ -19,21 +21,28 @@ const PRIVATE_KEY_RESPONSE = {
 
 function containsSensitiveRequest(args: unknown): boolean {
   const text = JSON.stringify(args ?? "").toLowerCase();
-  return text.includes("private key") || text.includes("seed phrase") || text.includes("mnemonic") || text.includes("privatekey");
+  return (
+    text.includes("private key") ||
+    text.includes("seed phrase") ||
+    text.includes("mnemonic") ||
+    text.includes("privatekey")
+  );
 }
 
-const ALL_TOOLS = [
-  ...MARKET_TOOLS,
-  ...RESEARCH_TOOLS,
-  ...DEFI_TOOLS,
-  ...AUTOMATION_TOOLS,
-  ...SWARM_TOOLS,
-  ...INSIGHT_TOOLS,
-  ...FRAMEWORK_TOOLS,
+export const ALL_TOOLS = [
+  ...MARKET_TOOLS,       // 6 — market data, signals, whale alerts
+  ...NEWS_TOOLS,         // 2 — crypto news, manual signal gen
+  ...RESEARCH_TOOLS,     // 3 — research, insight, ask_noel
+  ...DEFI_TOOLS,         // 6 — portfolio, swap, send, deploy, claim, mint
+  ...AUTOMATION_TOOLS,   // 4 — create, list, pause, delete
+  ...SWARM_TOOLS,        // 6 — start, stop, status, memory, scores
+  ...FRAMEWORK_TOOLS,    // 6 — task packets, playbooks, sentinel, ledger
+  ...WALLET_TOOLS,       // 2 — wallet address, telegram setup
+  ...INSIGHT_TOOLS,      // 2 — get_insight, ask_noel (via insight route)
 ];
 
 export const server = new Server(
-  { name: "noelclaw", version: "1.9.0" },
+  { name: "noelclaw", version: "2.1.0" },
   { capabilities: { tools: {} } }
 );
 
@@ -47,12 +56,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     const result =
       await handleMarketTool(name, args) ??
+      await handleNewsTool(name, args) ??
       await handleResearchTool(name, args) ??
       await handleDefiTool(name, args) ??
       await handleAutomationTool(name, args) ??
       await handleSwarmTool(name, args) ??
-      await handleInsightTool(name, args) ??
-      await handleFrameworkTool(name, args);
+      await handleFrameworkTool(name, args) ??
+      await handleWalletTool(name, args) ??
+      await handleInsightTool(name, args);
 
     if (result) return result;
 

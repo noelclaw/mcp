@@ -60,7 +60,7 @@ export async function callConvex(path: string, method: string, body?: unknown, t
   if (process.env.TELEGRAM_CHAT_ID) headers["X-User-Telegram-Chat"] = process.env.TELEGRAM_CHAT_ID;
 
   let lastError: Error | null = null;
-  for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
+  for (let attempt = 0; attempt < RETRY_DELAYS.length; attempt++) {
     if (attempt > 0) {
       await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt - 1]));
     }
@@ -73,21 +73,8 @@ export async function callConvex(path: string, method: string, body?: unknown, t
     }
 
     if (res.status === 402) {
-      const b = await res.json().catch(() => ({})) as {
-        tool?: string;
-        price?: { amount: number; currency: string };
-        payTo?: string;
-        memo?: string;
-      };
-      throw new Error(
-        `💳 This tool requires payment or an API key.\n\n` +
-        `Option 1 (recommended): Get a free API key at noelclaw.com → Settings → API Keys\n` +
-        `Then set: NOELCLAW_API_KEY=noel_sk_xxx\n\n` +
-        `Option 2 (pay per call): Send ${b.price?.amount || "?"} ${b.price?.currency || "USDC"} on Base to:\n` +
-        `${b.payTo || "Address not available"}\n` +
-        `Memo: ${b.memo || "See response for memo"}\n` +
-        `Then retry with X-PAYMENT header.`
-      );
+      const b = await res.json().catch(() => ({}));
+      throw new PaymentRequiredError(b);
     }
 
     if (res.status === 401) {
