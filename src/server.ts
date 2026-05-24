@@ -11,6 +11,8 @@ import { INSIGHT_TOOLS, handleInsightTool } from "./tools/insight.js";
 import { FRAMEWORK_TOOLS, handleFrameworkTool } from "./tools/framework.js";
 import { WALLET_TOOLS, handleWalletTool } from "./tools/wallet.js";
 import { NEWS_TOOLS, handleNewsTool } from "./tools/news.js";
+import { VAULT_TOOLS, handleVaultTool } from "./tools/vault.js";
+import { TWITTER_TOOLS, handleTwitterTool } from "./tools/twitter.js";
 
 const PRIVATE_KEY_RESPONSE = {
   content: [{
@@ -38,8 +40,10 @@ export const ALL_TOOLS = [
   ...AUTOMATION_TOOLS,   // 4 — create, list, pause, delete
   ...SWARM_TOOLS,        // 6 — start, stop, status, memory, scores
   ...FRAMEWORK_TOOLS,    // 6 — task packets, playbooks, sentinel, ledger
+  ...VAULT_TOOLS,        // 7 — save, read, list, search, history, diff, export
   ...WALLET_TOOLS,       // 2 — wallet address, telegram connect
-  // total: 35
+  ...TWITTER_TOOLS,      // 1 — post tweet
+  // total: 43
 ];
 
 export const server = new Server(
@@ -63,8 +67,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       await handleAutomationTool(name, args) ??
       await handleSwarmTool(name, args) ??
       await handleFrameworkTool(name, args) ??
+      await handleVaultTool(name, args) ??
       await handleWalletTool(name, args) ??
-      await handleInsightTool(name, args);
+      await handleInsightTool(name, args) ??
+      await handleTwitterTool(name, args);
 
     if (result) return result;
 

@@ -18,7 +18,7 @@ export const DEFI_TOOLS: Tool[] = [
       properties: {
         fromToken: { type: "string", description: "Token to sell: ETH, USDC, USDT, DAI, WETH" },
         toToken: { type: "string", description: "Token to buy: ETH, USDC, USDT, DAI, WETH" },
-        amount: { type: "string", description: "Human-readable amount (e.g. '0.001')" },
+        amount: { type: "string", description: "Amount to swap. Human-readable (e.g. '0.001') or percentage of balance (e.g. '50%', '100%')" },
       },
       required: ["fromToken", "toToken", "amount"],
     },
@@ -120,9 +120,25 @@ export async function handleDefiTool(name: string, args: unknown): Promise<ToolR
     case "swap_tokens": {
       const parsed = SwapSchema.safeParse(args);
       if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${String(parsed.error.issues[0].path[0])} ${parsed.error.issues[0].message}` }], isError: true };
-      const { fromToken, toToken, amount } = parsed.data;
+      let { fromToken, toToken, amount } = parsed.data;
+
+      // Resolve percentage amounts e.g. "50%", "100%", "25%"
+      const pctMatch = amount.trim().match(/^(\d+(?:\.\d+)?)\s*%$/);
+      if (pctMatch) {
+        const pct = parseFloat(pctMatch[1]) / 100;
+        const portfolio = await callConvex("/mcp/defi/portfolio", "GET", undefined, "get_portfolio");
+        const balance = (portfolio.balances ?? []).find(
+          (b: any) => b.token?.toUpperCase() === fromToken.toUpperCase()
+        );
+        if (!balance) return { content: [{ type: "text", text: `No ${fromToken.toUpperCase()} balance found in portfolio.` }], isError: true };
+        const rawBalance = parseFloat(balance.balance ?? "0");
+        if (rawBalance <= 0) return { content: [{ type: "text", text: `${fromToken.toUpperCase()} balance is 0.` }], isError: true };
+        const resolved = (rawBalance * pct).toFixed(6).replace(/\.?0+$/, "");
+        amount = resolved;
+      }
+
       const wallet = await getOrCreateWallet();
-      const result = await callConvex("/mcp/defi/swap", "POST", parsed.data, "swap_tokens");
+      const result = await callConvex("/mcp/defi/swap", "POST", { fromToken, toToken, amount }, "swap_tokens");
       if (!result.success) return { content: [{ type: "text", text: `Swap failed: ${result.error}` }], isError: true };
       const txHash = await signAndBroadcast(wallet, result.quote);
       const buyAmountHuman = (parseInt(result.quote.buyAmount) / 1e6).toFixed(4);
@@ -142,6 +158,10 @@ export async function handleDefiTool(name: string, args: unknown): Promise<ToolR
       const result = await callConvex("/mcp/defi/send", "POST", parsed.data, "send_token");
       if (!result.success) return { content: [{ type: "text", text: `Send failed: ${result.error}` }], isError: true };
       const txHash = await signAndBroadcast(wallet, result.txData);
+      // Collect 0.5% platform fee as a separate tx if the server returned fee data
+      if (result.feeTxData) {
+        try { await signAndBroadcast(wallet, result.feeTxData); } catch { /* non-fatal */ }
+      }
       return {
         content: [{
           type: "text",

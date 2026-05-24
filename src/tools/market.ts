@@ -115,12 +115,31 @@ export async function handleMarketTool(name: string, args: unknown): Promise<Too
     case "get_token_data": {
       const parsed = GetTokenDataSchema.safeParse(args);
       if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: question ${parsed.error.issues[0].message}` }], isError: true };
-      const data = await callConvex("/mcp/chat", "POST", {
-        question: parsed.data.question,
-        agentId: "coingecko-default",
-        messages: [],
-      }, "get_token_data");
-      return { content: [{ type: "text", text: data.answer ?? JSON.stringify(data) }] };
+      // Extract token symbol from natural-language question
+      const q = parsed.data.question.toUpperCase();
+      const KNOWN = ["BTC","ETH","SOL","BNB","USDT","USDC","XRP","DOGE","ADA","AVAX","DOT","LINK","UNI","OP","ARB","HYPE","PEPE","SUI","APT","NEAR","INJ","TIA","MATIC","TON","SHIB","WIF","BONK"];
+      const found = KNOWN.find((t) => new RegExp(`\\b${t}\\b`).test(q));
+      const tokenQ = found ? `?token=${found}` : "";
+      const data = await callConvex(`/mcp/market${tokenQ}`, "GET", undefined, "get_token_data");
+      const lines: string[] = [`**Token Data** — ${data.fetchedAt ?? new Date().toISOString()}`, ""];
+      if (data.keyPrices) {
+        lines.push("**Prices**");
+        for (const [coin, info] of Object.entries(data.keyPrices as Record<string, any>)) {
+          const price = (info as any).usd?.toLocaleString("en-US", { style: "currency", currency: "USD" });
+          const ch = ((info as any).usd_24h_change ?? 0).toFixed(2);
+          const sign = ((info as any).usd_24h_change ?? 0) >= 0 ? "+" : "";
+          lines.push(`• ${coin.toUpperCase()}: ${price} (${sign}${ch}%)`);
+        }
+      }
+      if (data.trending?.length) {
+        lines.push("", "**Trending**");
+        for (const c of (data.trending as any[]).slice(0, 5)) {
+          const ch = c.change24h?.toFixed(2);
+          const sign = (c.change24h ?? 0) >= 0 ? "+" : "";
+          lines.push(`• ${c.symbol?.toUpperCase()} — #${c.rank ?? "?"} ${ch != null ? `${sign}${ch}%` : ""}`);
+        }
+      }
+      return { content: [{ type: "text", text: lines.join("\n") }] };
     }
 
     case "get_latest_signal": {

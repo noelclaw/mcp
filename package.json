@@ -1,6 +1,6 @@
 {
   "name": "@noelclaw/research",
-  "version": "2.1.0",
+  "version": "2.8.0",
   "description": "Noelclaw MCP server — crypto research, live market data, and AI agent tools for Claude, Hermes, Cursor, and any MCP-compatible client",
   "main": "dist/index.js",
   "bin": {

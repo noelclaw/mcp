@@ -68,17 +68,17 @@ mcp_servers:
 
 ---
 
-## Tools (35)
+## Tools (43)
 
 ### Market & Signals
 
 | Tool | Description |
 |------|-------------|
-| `get_market_data` | Live top-20 coins by market cap, trending coins, BTC/ETH/SOL prices |
+| `get_market_data` | Live top-20 coins by market cap, trending coins, BTC/ETH/SOL prices via Bankr real-time feed |
 | `get_token_data` | Price, 24h change, market cap, and volume for any token |
-| `get_latest_signal` | Latest BTC and/or ETH 1H trading signals — entry, TP1, TP2, stop loss, confidence |
+| `get_latest_signal` | Latest BTC and/or ETH 4H trading signals — entry, TP1, TP2, stop loss, confidence, Volume Profile |
 | `get_signal_history` | Signal history with win/loss record and winrate stats |
-| `get_smart_money_alerts` | Smart money and insider wallet movements for micro-cap tokens |
+| `get_smart_money_alerts` | Real DexScreener data — Base chain micro-cap tokens (<$100k mcap) with buy/sell flow analysis |
 | `get_daily_recap` | Today's trading performance recap with winrate, PnL stats, and AI review |
 | `get_news` | Latest crypto news digest — top stories, regulatory updates, sentiment summary |
 | `generate_signal` | Manually trigger a fresh BTC/ETH signal right now (don't wait for 08:00 UTC cron) |
@@ -87,9 +87,23 @@ mcp_servers:
 
 | Tool | Description |
 |------|-------------|
-| `research` | Deep crypto research — like Perplexity but for crypto. Returns overview, findings, market impact, affected tokens, and sentiment |
-| `get_insight` | Live crypto + macro briefing — what's happening right now in crypto, macro, and X/Twitter |
+| `research` | Deep crypto research via Bankr gpt-5.4-mini (real-time). Returns overview, key findings, market impact, affected tokens, sentiment |
+| `get_insight` | Live crypto + macro briefing via Grok (real-time X/Twitter) with Bankr live price grounding |
 | `ask_noel` | Ask Noel AI for DeFi analysis, trade ideas, market outlook, and crypto research |
+
+### Noel-Vault
+
+> Persistent memory + artifact layer for agents. Save research, store execution history, archive workflows, version prompts — all searchable across sessions.
+
+| Tool | Description |
+|------|-------------|
+| `vault_save` | Save any content to your vault — research, execution logs, workflows, prompts, files |
+| `vault_read` | Read a vault entry by key |
+| `vault_list` | List all your vault entries with type, title, version, and last updated |
+| `vault_search` | Full-text search across all vault content — title, key, content, tags |
+| `vault_history` | View version history for a vault entry |
+| `vault_diff` | Compare two versions of a vault entry |
+| `vault_export` | Export a vault entry as markdown or JSON |
 
 ### Wallet & DeFi
 
@@ -97,11 +111,11 @@ mcp_servers:
 |------|-------------|
 | `get_wallet_address` | Show your local MCP wallet address on Base mainnet |
 | `get_portfolio` | Full token portfolio on Base mainnet with ETH and ERC-20 balances and USD values |
-| `swap_tokens` | Swap ETH, USDC, USDT, DAI, WETH on Base mainnet via 0x Permit2 |
+| `swap_tokens` | Swap ETH, USDC, USDT, DAI, WETH on Base mainnet. Supports exact amounts or percentages (e.g. "50%") |
 | `send_token` | Send ETH or any ERC-20 token to any address on Base mainnet |
-| `deploy_token` | Deploy a new ERC-20 token on Base mainnet |
-| `claim_fees` | Claim accumulated protocol fees |
-| `mint_nft` | Mint an NFT on Base mainnet |
+| `deploy_token` | Deploy a new ERC-20 token on Base via Flaunch — earns swap fees forever |
+| `claim_fees` | Claim accumulated ETH from Flaunch token swap fees |
+| `mint_nft` | Mint an NFT on Base mainnet from any URL or contract address |
 
 ### Automations
 
@@ -136,11 +150,12 @@ mcp_servers:
 | `get_noel_ledger` | Full audit trail of every Sentinel decision — approved, warned, or blocked |
 | `get_sentinel_rules` | Exact rules for each agent role — territory, permissions, blocked actions, value caps |
 
-### Account & Notifications
+### Account, Notifications & Social
 
 | Tool | Description |
 |------|-------------|
-| `set_telegram` | Connect Telegram for push notifications — signals, whale alerts, daily recaps |
+| `set_telegram` | Connect Telegram for push notifications — signals, smart money alerts, daily recaps |
+| `post_tweet` | Post a tweet on X (Twitter) via Ayrshare. Requires `AYRSHARE_API_KEY` |
 
 ---
 
