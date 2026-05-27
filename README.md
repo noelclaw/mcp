@@ -175,13 +175,6 @@ Set `NOELCLAW_API_KEY` in your MCP config. That's it.
 |-----|-------------|
 | `NOELCLAW_API_KEY` | Your API key (`noel_...`) â€” get one at `POST https://api.noelclaw.com/auth/key` |
 
-### MiroShark (optional)
-
-| Var | Description |
-|-----|-------------|
-| `MIROSHARK_URL` | URL of your deployed MiroShark instance |
-| `MIROSHARK_ADMIN_TOKEN` | Admin token set on your MiroShark deployment |
-
 ### BYOK (optional)
 
 | Var | Used for |
@@ -234,7 +227,6 @@ get_noel_ledger
 |-------|-----|
 | Tools not appearing | Restart your MCP client after adding the config |
 | `401 Unauthorized` | Check `NOELCLAW_API_KEY` is set â€” get one at `POST https://api.noelclaw.com/auth/key` |
-| `miroshark_simulate` error | Set `MIROSHARK_URL` and `MIROSHARK_ADMIN_TOKEN` |
 | Server starts but no response | Expected â€” server waits for MCP stdin, not HTTP |
 
 ---

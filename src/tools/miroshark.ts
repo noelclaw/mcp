@@ -1,4 +1,5 @@
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
+import { callConvex } from "../convex.js";
 import { ToolResult } from "../types.js";
 
 export const MIROSHARK_TOOLS: Tool[] = [
@@ -43,34 +44,6 @@ export const MIROSHARK_TOOLS: Tool[] = [
   },
 ];
 
-function getConfig() {
-  const url = process.env.MIROSHARK_URL?.replace(/\/$/, "");
-  const token = process.env.MIROSHARK_ADMIN_TOKEN;
-  return { url, token };
-}
-
-async function mirofetch(path: string, method: string, body?: unknown): Promise<any> {
-  const { url, token } = getConfig();
-  if (!url) throw new Error("MIROSHARK_URL not set");
-  if (!token) throw new Error("MIROSHARK_ADMIN_TOKEN not set");
-
-  const res = await fetch(`${url}${path}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`,
-    },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-    signal: AbortSignal.timeout(30000),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`MiroShark ${res.status}: ${err.slice(0, 200)}`);
-  }
-  return res.json();
-}
-
 export async function handleMirosharkTool(name: string, args: unknown): Promise<ToolResult | null> {
   const a = (args ?? {}) as Record<string, any>;
 
@@ -79,20 +52,12 @@ export async function handleMirosharkTool(name: string, args: unknown): Promise<
       return { content: [{ type: "text", text: "scenario is required" }], isError: true };
     }
 
-    const { url, token } = getConfig();
-    if (!url || !token) {
-      return {
-        content: [{ type: "text", text: "MiroShark not configured — set MIROSHARK_URL and MIROSHARK_ADMIN_TOKEN" }],
-        isError: true,
-      };
-    }
-
     try {
-      // Step 1: ask (parse scenario into simulation params)
-      const asked = await mirofetch("/api/simulation/ask", "POST", { question: a.scenario });
+      // Step 1: parse scenario into simulation params
+      const asked = await callConvex("/miroshark/api/simulation/ask", "POST", { question: a.scenario });
 
       // Step 2: create simulation
-      const created = await mirofetch("/api/simulation/create", "POST", {
+      const created = await callConvex("/miroshark/api/simulation/create", "POST", {
         ...asked,
         num_agents: Math.min(a.agents ?? 10, 50),
         num_steps: a.steps ?? 5,
@@ -101,17 +66,15 @@ export async function handleMirosharkTool(name: string, args: unknown): Promise<
       const simId = created.simulation_id ?? created.id;
       if (!simId) throw new Error("No simulation ID in create response");
 
-      // Step 3: prepare
-      await mirofetch(`/api/simulation/${simId}/prepare`, "POST", {});
-
-      // Step 4: start
-      await mirofetch(`/api/simulation/${simId}/start`, "POST", {});
+      // Step 3: prepare + start
+      await callConvex(`/miroshark/api/simulation/${simId}/prepare`, "POST", {});
+      await callConvex(`/miroshark/api/simulation/${simId}/start`, "POST", {});
 
       return {
         content: [{
           type: "text",
           text: [
-            `🦈 **MiroShark simulation started**`,
+            `**MiroShark simulation started**`,
             `Scenario: ${a.scenario}`,
             `Simulation ID: \`${simId}\``,
             `Agents: ${a.agents ?? 10} · Steps: ${a.steps ?? 5}`,
@@ -131,11 +94,11 @@ export async function handleMirosharkTool(name: string, args: unknown): Promise<
     }
 
     try {
-      const data = await mirofetch(`/api/simulation/${a.simulation_id}/status`, "GET");
+      const data = await callConvex(`/miroshark/api/simulation/${a.simulation_id}/status`, "GET");
 
       const status = data.status ?? "unknown";
       const lines = [
-        `🦈 **MiroShark Simulation \`${a.simulation_id}\`**`,
+        `**MiroShark Simulation \`${a.simulation_id}\`**`,
         `Status: **${status}**`,
       ];
 
