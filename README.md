@@ -255,4 +255,4 @@ get_noel_ledger()
 
 - npm: [npmjs.com/package/@noelclaw/mcp](https://npmjs.com/package/@noelclaw/mcp)
 - GitHub: [github.com/noelclaw/mcp](https://github.com/noelclaw/mcp)
-- Platform: [noelclaw.xyz](https://noelclaw.xyz)
+- Platform: [noelclaw.com](https://noelclaw.com)
