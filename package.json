@@ -27,11 +27,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/noelclaw/noelmcp.git"
+    "url": "git+https://github.com/noelclaw/mcp.git"
   },
-  "homepage": "https://github.com/noelclaw/noelmcp#readme",
+  "homepage": "https://github.com/noelclaw/mcp#readme",
   "bugs": {
-    "url": "https://github.com/noelclaw/noelmcp/issues"
+    "url": "https://github.com/noelclaw/mcp/issues"
   },
   "license": "MIT",
   "files": [

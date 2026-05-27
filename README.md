@@ -242,5 +242,5 @@ get_noel_ledger
 ## Links
 
 - npm: [npmjs.com/package/@noelclaw/mcp](https://npmjs.com/package/@noelclaw/mcp)
-- GitHub: [github.com/noelclaw/research](https://github.com/noelclaw/mcp)
+- GitHub: [github.com/noelclaw/mcp](https://github.com/noelclaw/mcp)
 - Platform: [noelclaw.com](https://noelclaw.com)
