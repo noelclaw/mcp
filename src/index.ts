@@ -19,7 +19,7 @@ async function main() {
   try {
     const wallet = await getOrCreateWallet();
     console.error(`\x1b[36m  ◆ wallet\x1b[0m  ${wallet.address}`);
-    console.error(`\x1b[36m  ◆ status\x1b[0m  ready · 46 tools loaded\n`);
+    console.error(`\x1b[36m  ◆ status\x1b[0m  ready · 34 tools loaded\n`);
   } catch (err) {
     console.error(`[noelclaw] wallet init failed: ${err}`);
   }

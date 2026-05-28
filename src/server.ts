@@ -35,9 +35,8 @@ function containsSensitiveRequest(args: unknown): boolean {
 
 export const ALL_TOOLS = [
   ...MARKET_TOOLS,       // 2 — market data, token data
-  ...RESEARCH_TOOLS,     // 1 — deep research
-  ...INSIGHT_TOOLS,      // 2 — get_insight, ask_noel
-  ...DEFI_TOOLS,         // 3 — swap, send, claim
+  ...INSIGHT_TOOLS,      // 1 — ask_noel
+  ...DEFI_TOOLS,         // 2 — swap, send
   ...AUTOMATION_TOOLS,   // 4 — create, list, pause, delete
   ...SWARM_TOOLS,        // 6 — start, stop, status, memory, scores
   ...FRAMEWORK_TOOLS,    // 6 — task packets, playbooks, sentinel, ledger
@@ -46,7 +45,7 @@ export const ALL_TOOLS = [
   ...TWITTER_TOOLS,      // 1 — post tweet
   ...MIROSHARK_TOOLS,    // 2 — simulate, status
   ...HUMANIZER_TOOLS,    // 1 — humanize_text
-  // total: 37
+  // total: 34
 ];
 
 export const server = new Server(

@@ -31,15 +31,6 @@ export const DEFI_TOOLS: Tool[] = [
       required: ["token", "toAddress", "amount"],
     },
   },
-  {
-    name: "claim_fees",
-    description: "Claim accumulated ETH from your Flaunch token swap fees. Calls claim() on the Flaunch PositionManager — pulls all pending ETH from your deployed tokens to your wallet.",
-    inputSchema: {
-      type: "object",
-      properties: {},
-      required: [],
-    },
-  },
 ];
 
 const SwapSchema = z.object({ fromToken: z.string().min(1), toToken: z.string().min(1), amount: z.string().min(1) });
@@ -50,8 +41,7 @@ export async function handleDefiTool(name: string, args: unknown): Promise<ToolR
     case "swap_tokens": {
       const parsed = SwapSchema.safeParse(args);
       if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${String(parsed.error.issues[0].path[0])} ${parsed.error.issues[0].message}` }], isError: true };
-      let { fromToken, toToken, amount } = parsed.data;
-
+      const { fromToken, toToken, amount } = parsed.data;
       const wallet = await getOrCreateWallet();
       const result = await callConvex("/mcp/defi/swap", "POST", { fromToken, toToken, amount }, "swap_tokens");
       if (!result.success) return { content: [{ type: "text", text: `Swap failed: ${result.error}` }], isError: true };
@@ -73,7 +63,6 @@ export async function handleDefiTool(name: string, args: unknown): Promise<ToolR
       const result = await callConvex("/mcp/defi/send", "POST", parsed.data, "send_token");
       if (!result.success) return { content: [{ type: "text", text: `Send failed: ${result.error}` }], isError: true };
       const txHash = await signAndBroadcast(wallet, result.txData);
-      // Collect 0.5% platform fee as a separate tx if the server returned fee data
       if (result.feeTxData) {
         try { await signAndBroadcast(wallet, result.feeTxData); } catch { /* non-fatal */ }
       }
@@ -81,19 +70,6 @@ export async function handleDefiTool(name: string, args: unknown): Promise<ToolR
         content: [{
           type: "text",
           text: [`✅ Sent!`, `${amount} ${token.toUpperCase()} → \`${toAddress}\``, `Tx Hash: \`${txHash}\``, `https://basescan.org/tx/${txHash}`].join("\n"),
-        }],
-      };
-    }
-
-    case "claim_fees": {
-      const wallet = await getOrCreateWallet();
-      const result = await callConvex("/mcp/token/claim", "POST", {}, "claim_fees");
-      if (result.error) return { content: [{ type: "text", text: `Claim failed: ${result.error}` }], isError: true };
-      const txHash = await signAndBroadcast(wallet, result);
-      return {
-        content: [{
-          type: "text",
-          text: [`✅ ETH claimed successfully!`, `Tx Hash: \`${txHash}\``, `https://basescan.org/tx/${txHash}`].join("\n"),
         }],
       };
     }
