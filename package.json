@@ -1,6 +1,6 @@
 {
   "name": "@noelclaw/mcp",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "Noelclaw as an MCP skill — persistent memory, multi-agent coordination, scenario simulation, DeFi execution, and Sentinel-gated playbooks.",
   "main": "dist/index.js",
   "bin": {
