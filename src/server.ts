@@ -12,6 +12,10 @@ import { WALLET_TOOLS, handleWalletTool } from "./tools/wallet.js";
 import { VAULT_TOOLS, handleVaultTool } from "./tools/vault.js";
 import { MIROSHARK_TOOLS, handleMirosharkTool } from "./tools/miroshark.js";
 import { HUMANIZER_TOOLS, handleHumanizerTool } from "./tools/humanizer.js";
+import { AGENT_TOOLS, handleAgentTool } from "./tools/agents.js";
+import { SCANNER_TOOLS, handleScannerTool } from "./tools/scanner.js";
+import { CODER_TOOLS, handleCoderTool } from "./tools/coder.js";
+import { BASE_TOOLS, handleBaseTool } from "./tools/base.js";
 
 const PRIVATE_KEY_RESPONSE = {
   content: [{
@@ -33,7 +37,7 @@ function containsSensitiveRequest(args: unknown): boolean {
 export const ALL_TOOLS = [
   ...MARKET_TOOLS,       // 2 — get_market_data, get_token_data
   ...INSIGHT_TOOLS,      // 1 — ask_noel
-  ...DEFI_TOOLS,         // 4 — get_portfolio, estimate_swap, swap_tokens, send_token
+  ...DEFI_TOOLS,         // 5 — get_portfolio, estimate_swap, swap_tokens, send_token, scan_wallet
   ...AUTOMATION_TOOLS,   // 5 — create, list, pause, delete, get_runs
   ...SWARM_TOOLS,        // 6 — start, stop, status, read/write memory, scores
   ...FRAMEWORK_TOOLS,    // 6 — task packets, playbooks, sentinel, ledger
@@ -41,7 +45,11 @@ export const ALL_TOOLS = [
   ...WALLET_TOOLS,       // 2 — get_wallet_address, set_telegram
   ...MIROSHARK_TOOLS,    // 3 — simulate, status, stop
   ...HUMANIZER_TOOLS,    // 1 — humanize_text
-  // total: 37
+  ...AGENT_TOOLS,        // 2 — list_agents, hire_agent
+  ...SCANNER_TOOLS,      // 3 — score_token, check_token, scan_dips
+  ...CODER_TOOLS,        // 6 — scaffold_project, generate_component, generate_contract, audit_contract, explain_code, review_code
+  ...BASE_TOOLS,         // 4 — query_vaults, list_markets, prepare_deposit, chain_stats
+  // total: 53
 ];
 
 export const server = new Server(
@@ -67,7 +75,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       await handleWalletTool(name, args) ??
       await handleInsightTool(name, args) ??
       await handleMirosharkTool(name, args) ??
-      await handleHumanizerTool(name, args);
+      await handleHumanizerTool(name, args) ??
+      await handleAgentTool(name, args) ??
+      await handleScannerTool(name, args) ??
+      await handleCoderTool(name, args) ??
+      await handleBaseTool(name, args);
 
     if (result) return result;
 
