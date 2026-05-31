@@ -65,6 +65,28 @@ export const MARKET_TOOLS: Tool[] = [
 const GetMarketDataSchema = z.object({ token: z.string().optional() });
 const GetTokenDataSchema = z.object({ question: z.string().min(1) });
 
+export interface MarketSnapshot {
+  btc: number; eth: number; sol: number;
+  btcChange: number; ethChange: number; solChange: number;
+}
+
+export async function fetchMarketSnapshot(): Promise<MarketSnapshot | null> {
+  try {
+    const data = await cgFetch("/coins/markets?vs_currency=usd&ids=bitcoin,ethereum,solana&sparkline=false&price_change_percentage=24h");
+    const find = (id: string, field: string) => data.find((c: any) => c.id === id)?.[field] ?? 0;
+    return {
+      btc: find("bitcoin", "current_price"),
+      eth: find("ethereum", "current_price"),
+      sol: find("solana", "current_price"),
+      btcChange: find("bitcoin", "price_change_percentage_24h"),
+      ethChange: find("ethereum", "price_change_percentage_24h"),
+      solChange: find("solana", "price_change_percentage_24h"),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function handleMarketTool(name: string, args: unknown): Promise<ToolResult | null> {
   switch (name) {
     case "get_market_data": {

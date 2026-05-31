@@ -35,6 +35,20 @@ export const MIROSHARK_TOOLS: Tool[] = [
       required: ["simulation_id"],
     },
   },
+  {
+    name: "miroshark_stop",
+    description: "Stop a running MiroShark simulation.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        simulation_id: {
+          type: "string",
+          description: "Simulation ID to stop",
+        },
+      },
+      required: ["simulation_id"],
+    },
+  },
 ];
 
 // ── HTTP helpers ──────────────────────────────────────────────────────────────
@@ -287,6 +301,20 @@ export async function handleMirosharkTool(name: string, args: unknown): Promise<
           ].filter(Boolean).join("\n"),
         }],
       };
+    } catch (err: any) {
+      return { content: [{ type: "text", text: `MiroShark error: ${err.message}` }], isError: true };
+    }
+  }
+
+  // ── miroshark_stop ────────────────────────────────────────────────────────
+  if (name === "miroshark_stop") {
+    if (!a.simulation_id?.trim()) {
+      return { content: [{ type: "text", text: "simulation_id is required" }], isError: true };
+    }
+    const simId: string = a.simulation_id.trim();
+    try {
+      await miroJson(`/miroshark/api/simulation/${simId}/stop`, "POST", {});
+      return { content: [{ type: "text", text: `⏹️ Simulation \`${simId}\` stopped.` }] };
     } catch (err: any) {
       return { content: [{ type: "text", text: `MiroShark error: ${err.message}` }], isError: true };
     }

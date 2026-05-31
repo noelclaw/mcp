@@ -3,23 +3,20 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { PaymentRequiredError, buildPaymentHeader } from "./convex.js";
 import { MARKET_TOOLS, handleMarketTool } from "./tools/market.js";
-import { RESEARCH_TOOLS, handleResearchTool } from "./tools/research.js";
 import { DEFI_TOOLS, handleDefiTool } from "./tools/defi.js";
 import { AUTOMATION_TOOLS, handleAutomationTool } from "./tools/automation.js";
 import { SWARM_TOOLS, handleSwarmTool } from "./tools/swarm.js";
 import { INSIGHT_TOOLS, handleInsightTool } from "./tools/insight.js";
 import { FRAMEWORK_TOOLS, handleFrameworkTool } from "./tools/framework.js";
 import { WALLET_TOOLS, handleWalletTool } from "./tools/wallet.js";
-import { NEWS_TOOLS, handleNewsTool } from "./tools/news.js";
 import { VAULT_TOOLS, handleVaultTool } from "./tools/vault.js";
-import { TWITTER_TOOLS, handleTwitterTool } from "./tools/twitter.js";
 import { MIROSHARK_TOOLS, handleMirosharkTool } from "./tools/miroshark.js";
 import { HUMANIZER_TOOLS, handleHumanizerTool } from "./tools/humanizer.js";
 
 const PRIVATE_KEY_RESPONSE = {
   content: [{
     type: "text" as const,
-    text: "I don't have access to your private key. Your wallet is secured by Noelclaw's encrypted vault. Only you can manage it at noelclaw.xyz",
+    text: "I don't have access to your private key. Your wallet is secured by Noelclaw's encrypted vault. Only you can manage it at noelclaw.com",
   }],
 };
 
@@ -34,18 +31,17 @@ function containsSensitiveRequest(args: unknown): boolean {
 }
 
 export const ALL_TOOLS = [
-  ...MARKET_TOOLS,       // 2 — market data, token data
+  ...MARKET_TOOLS,       // 2 — get_market_data, get_token_data
   ...INSIGHT_TOOLS,      // 1 — ask_noel
-  ...DEFI_TOOLS,         // 2 — swap, send
-  ...AUTOMATION_TOOLS,   // 4 — create, list, pause, delete
-  ...SWARM_TOOLS,        // 6 — start, stop, status, memory, scores
+  ...DEFI_TOOLS,         // 4 — get_portfolio, estimate_swap, swap_tokens, send_token
+  ...AUTOMATION_TOOLS,   // 5 — create, list, pause, delete, get_runs
+  ...SWARM_TOOLS,        // 6 — start, stop, status, read/write memory, scores
   ...FRAMEWORK_TOOLS,    // 6 — task packets, playbooks, sentinel, ledger
   ...VAULT_TOOLS,        // 7 — save, read, list, search, history, diff, export
-  ...WALLET_TOOLS,       // 2 — wallet address, telegram connect
-  ...TWITTER_TOOLS,      // 1 — post tweet
-  ...MIROSHARK_TOOLS,    // 2 — simulate, status
+  ...WALLET_TOOLS,       // 2 — get_wallet_address, set_telegram
+  ...MIROSHARK_TOOLS,    // 3 — simulate, status, stop
   ...HUMANIZER_TOOLS,    // 1 — humanize_text
-  // total: 34
+  // total: 37
 ];
 
 export const server = new Server(
@@ -63,8 +59,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     const result =
       await handleMarketTool(name, args) ??
-      await handleNewsTool(name, args) ??
-      await handleResearchTool(name, args) ??
       await handleDefiTool(name, args) ??
       await handleAutomationTool(name, args) ??
       await handleSwarmTool(name, args) ??
@@ -72,7 +66,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       await handleVaultTool(name, args) ??
       await handleWalletTool(name, args) ??
       await handleInsightTool(name, args) ??
-      await handleTwitterTool(name, args) ??
       await handleMirosharkTool(name, args) ??
       await handleHumanizerTool(name, args);
 

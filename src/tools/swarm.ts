@@ -2,6 +2,7 @@ import { z } from "zod";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { callConvex } from "../convex.js";
 import { ToolResult } from "../types.js";
+import { fetchMarketSnapshot } from "./market.js";
 
 export const SWARM_TOOLS: Tool[] = [
   {
@@ -78,10 +79,35 @@ export async function handleSwarmTool(name: string, args: unknown): Promise<Tool
       if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: config ${parsed.error.issues[0].message}` }], isError: true };
       const data = await callConvex("/swarm/start", "POST", { config: parsed.data.config }, "start_swarm");
       if (!data.success) return { content: [{ type: "text", text: `Failed: ${data.error}` }], isError: true };
+
+      const snapshot = await fetchMarketSnapshot();
+      if (snapshot) {
+        const ts = new Date().toUTCString();
+        const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${ts})`;
+        const priceOnly = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        await Promise.all([
+          callConvex("/swarm/memory/write", "POST", { agentId: "market-monitor", key: "BTC/USD", value: fmt(snapshot.btc) }, "write_swarm_memory"),
+          callConvex("/swarm/memory/write", "POST", { agentId: "market-monitor", key: "ETH/USD", value: fmt(snapshot.eth) }, "write_swarm_memory"),
+          callConvex("/swarm/memory/write", "POST", { agentId: "market-monitor", key: "SOL/USD", value: fmt(snapshot.sol) }, "write_swarm_memory"),
+          callConvex("/swarm/memory/write", "POST", { agentId: "market-monitor", key: "btc_price", value: priceOnly(snapshot.btc) }, "write_swarm_memory"),
+          callConvex("/swarm/memory/write", "POST", { agentId: "market-monitor", key: "eth_price", value: priceOnly(snapshot.eth) }, "write_swarm_memory"),
+          callConvex("/swarm/memory/write", "POST", { agentId: "market-monitor", key: "sol_price", value: priceOnly(snapshot.sol) }, "write_swarm_memory"),
+        ]);
+      }
+
+      const p = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
       return {
         content: [{
           type: "text",
-          text: [`🤖 **Swarm Started**`, `Session ID: ${data.sessionId}`, `Started at: ${data.startedAt}`, ``, `Use \`get_swarm_status\` to monitor, \`stop_swarm\` to stop.`].join("\n"),
+          text: [
+            `🤖 **Swarm Started**`,
+            `Session ID: ${data.sessionId}`,
+            `Started at: ${data.startedAt}`,
+            snapshot ? `Market: BTC ${p(snapshot.btc)} | ETH ${p(snapshot.eth)} | SOL ${p(snapshot.sol)}` : "",
+            ``,
+            `Use \`get_swarm_status\` to monitor, \`stop_swarm\` to stop.`,
+          ].filter(Boolean).join("\n"),
         }],
       };
     }

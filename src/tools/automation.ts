@@ -36,10 +36,23 @@ export const AUTOMATION_TOOLS: Tool[] = [
       required: ["automationId"],
     },
   },
+  {
+    name: "get_automation_runs",
+    description: "Get the execution history for an automation — each run's status (success/failed/skipped), amount spent, tx hash, and error message if any. Useful for debugging why an automation isn't working.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        automationId: { type: "string", description: "Automation ID (from list_automations)" },
+        limit: { type: "number", description: "Max runs to return (default 20)" },
+      },
+      required: ["automationId"],
+    },
+  },
 ];
 
 const CreateAutomationSchema = z.object({ rawInput: z.string().min(1) });
 const AutomationIdSchema = z.object({ automationId: z.string().min(1) });
+const RunsSchema = z.object({ automationId: z.string().min(1), limit: z.number().int().min(1).max(100).optional() });
 
 export async function handleAutomationTool(name: string, args: unknown): Promise<ToolResult | null> {
   switch (name) {
@@ -102,6 +115,30 @@ export async function handleAutomationTool(name: string, args: unknown): Promise
       const data = await callConvex("/automations/delete", "POST", { automationId: parsed.data.automationId }, "delete_automation");
       if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
       return { content: [{ type: "text", text: "🗑️ Automation deleted." }] };
+    }
+
+    case "get_automation_runs": {
+      const parsed = RunsSchema.safeParse(args);
+      if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: automationId ${parsed.error.issues[0].message}` }], isError: true };
+      const { automationId, limit = 20 } = parsed.data;
+      const qs = `automationId=${encodeURIComponent(automationId)}&limit=${limit}`;
+      const data = await callConvex(`/automations/runs?${qs}`, "GET", undefined, "get_automation_runs");
+      if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
+
+      const runs: any[] = data.runs ?? [];
+      if (!runs.length) return { content: [{ type: "text", text: "No runs yet for this automation." }] };
+
+      const statusIcon: Record<string, string> = { success: "✅", failed: "❌", skipped: "⏭️" };
+      const lines = [`**Run History** (${runs.length} shown)`, ""];
+      for (const r of runs) {
+        const icon = statusIcon[r.status] ?? "•";
+        const time = new Date(r.triggeredAt).toUTCString();
+        const spent = r.amountUsd != null ? ` · $${Number(r.amountUsd).toFixed(2)}` : "";
+        const tx = r.txHash ? ` · [tx](https://basescan.org/tx/${r.txHash})` : "";
+        lines.push(`${icon} **${r.status}**${spent}${tx} — ${time}`);
+        if (r.error) lines.push(`   ⚠️ ${r.error}`);
+      }
+      return { content: [{ type: "text", text: lines.join("\n") }] };
     }
 
     default:

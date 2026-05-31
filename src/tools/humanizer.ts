@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { ToolResult } from "../types.js";
 
@@ -25,6 +26,14 @@ export const HUMANIZER_TOOLS: Tool[] = [
     },
   },
 ];
+
+const HumanizerSchema = z.object({
+  text: z.string().min(1),
+  voice_sample: z.string().optional(),
+});
+
+const BANKR_LLM_URL = "https://llm.bankr.bot/v1/chat/completions";
+const BANKR_MODEL = process.env.BANKR_MODEL ?? "grok-3";
 
 const HUMANIZER_SYSTEM = `You are a text editor that removes signs of AI-generated writing.
 
@@ -77,29 +86,31 @@ If a voice sample is provided, match its tone, rhythm, and vocabulary. Otherwise
 export async function handleHumanizerTool(name: string, args: unknown): Promise<ToolResult | null> {
   if (name !== "humanize_text") return null;
 
-  const a = (args ?? {}) as Record<string, any>;
-  if (!a.text?.trim()) {
-    return { content: [{ type: "text", text: "text is required" }], isError: true };
+  const parsed = HumanizerSchema.safeParse(args);
+  if (!parsed.success) {
+    return { content: [{ type: "text", text: `Invalid input: text ${parsed.error.issues[0].message}` }], isError: true };
   }
 
-  const apiKey = process.env.MINIMAX_API_KEY;
+  const { text, voice_sample } = parsed.data;
+
+  const apiKey = process.env.BANKR_API_KEY;
   if (!apiKey) {
-    return { content: [{ type: "text", text: "MINIMAX_API_KEY not set — humanizer requires MiniMax API access" }], isError: true };
+    return { content: [{ type: "text", text: "BANKR_API_KEY not set — add it to your MCP env config." }], isError: true };
   }
 
-  const userMsg = a.voice_sample
-    ? `VOICE SAMPLE (match this style):\n${a.voice_sample}\n\n---\n\nTEXT TO HUMANIZE:\n${a.text}`
-    : a.text;
+  const userMsg = voice_sample
+    ? `VOICE SAMPLE (match this style):\n${voice_sample}\n\n---\n\nTEXT TO HUMANIZE:\n${text}`
+    : text;
 
   try {
-    const res = await fetch("https://api.minimaxi.chat/v1/chat/completions", {
+    const res = await fetch(BANKR_LLM_URL, {
       method: "POST",
       headers: {
+        "X-API-Key": apiKey,
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "MiniMax-M2.7",
+        model: BANKR_MODEL,
         messages: [
           { role: "system", content: HUMANIZER_SYSTEM },
           { role: "user", content: userMsg },
@@ -111,13 +122,12 @@ export async function handleHumanizerTool(name: string, args: unknown): Promise<
     });
 
     if (!res.ok) {
-      const err = await res.text();
-      return { content: [{ type: "text", text: `API error: ${res.status} ${err.slice(0, 200)}` }], isError: true };
+      const err = await res.text().catch(() => res.statusText);
+      return { content: [{ type: "text", text: `Bankr LLM error ${res.status}: ${err.slice(0, 200)}` }], isError: true };
     }
 
-    const data: any = await res.json();
-    const raw = data?.choices?.[0]?.message?.content ?? "";
-    const output = raw.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+    const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const output = data.choices?.[0]?.message?.content?.trim() ?? "";
     if (!output) return { content: [{ type: "text", text: "Empty response from model" }], isError: true };
 
     return { content: [{ type: "text", text: output }] };
