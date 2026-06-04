@@ -49,10 +49,53 @@ export const DEFI_TOOLS: Tool[] = [
       required: ["token", "toAddress", "amount"],
     },
   },
+  {
+    name: "scan_wallet",
+    description: "AI-powered portfolio scan — concentration risk, volatility exposure, Base ecosystem opportunities, and a concrete 3-step action plan based on your actual holdings. Requires wallet auth.",
+    inputSchema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "analyze_wallet",
+    description:
+      "AI-powered analysis of any public wallet on Base — not just your own. " +
+      "Enter any 0x address: see token holdings, portfolio value, concentration risk, " +
+      "DeFi positions, and a behavioral profile (whale, degen, LP provider, etc.). " +
+      "Use to track smart money, research whales, or audit any wallet before copying trades.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        address: { type: "string", description: "Wallet address to analyze (0x...)" },
+        label: { type: "string", description: "Optional label for this wallet (e.g. 'whale from Twitter')" },
+      },
+      required: ["address"],
+    },
+  },
+  {
+    name: "get_defi_yields",
+    description:
+      "Fetch top DeFi yield opportunities on Base — Morpho, Moonwell, Aerodrome, Uniswap, and more. " +
+      "Returns live APY, TVL, and pool info from DeFiLlama (no API key required). " +
+      "Filter by token or minimum APY. Use before depositing to find the best rates.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        token:  { type: "string", description: "Optional: filter by token symbol, e.g. 'USDC', 'ETH', 'WETH'" },
+        minApy: { type: "number", description: "Optional: minimum APY % to show (default 1)" },
+        limit:  { type: "number", description: "Max results to return (default 20)" },
+      },
+      required: [],
+    },
+  },
 ];
 
 const SwapSchema = z.object({ fromToken: z.string().min(1), toToken: z.string().min(1), amount: z.string().min(1) });
 const SendSchema = z.object({ token: z.string().min(1), toAddress: z.string().regex(/^0x[0-9a-fA-F]{40}$/, "must be a valid 0x address"), amount: z.string().min(1) });
+const AnalyzeWalletSchema = z.object({ address: z.string().regex(/^0x[0-9a-fA-F]{40}$/, "must be a valid 0x address"), label: z.string().optional() });
+const DefiYieldsSchema = z.object({
+  token:  z.string().optional(),
+  minApy: z.number().optional(),
+  limit:  z.number().int().min(1).max(100).optional(),
+}).default({});
 
 const BUY_DECIMALS: Record<string, number> = { USDC: 6, USDT: 6, DAI: 18, ETH: 18, WETH: 18 };
 
@@ -145,6 +188,170 @@ export async function handleDefiTool(name: string, args: unknown): Promise<ToolR
           text: [`✅ Sent!`, `${amount} ${token.toUpperCase()} → \`${toAddress}\``, `Tx Hash: \`${txHash}\``, `https://basescan.org/tx/${txHash}`].join("\n"),
         }],
       };
+    }
+
+    case "scan_wallet": {
+      const data = await callConvex("/wallet/scan", "GET", undefined, "scan_wallet") as {
+        address?: string;
+        totalUsd?: number;
+        holdings?: Array<{ token: string; balance: number; valueUsd: number | null; pct: number | null }>;
+        analysis?: string | null;
+        analysisError?: string;
+        tokensUsed?: number;
+        scannedAt?: string;
+        error?: string;
+      };
+
+      if (data.error) {
+        return { content: [{ type: "text", text: `Scan failed: ${data.error}` }], isError: true };
+      }
+
+      const total = (data.totalUsd ?? 0).toFixed(2);
+      const topHoldings = (data.holdings ?? [])
+        .slice(0, 5)
+        .map((h) => `• **${h.token}**: $${(h.valueUsd ?? 0).toFixed(2)}${h.pct != null ? ` (${h.pct}%)` : ""}`)
+        .join("\n");
+
+      const header = [
+        `**Portfolio Scan** — Total: $${total}`,
+        `Wallet: \`${data.address ?? "unknown"}\``,
+        ``,
+        `**Holdings:**`,
+        topHoldings,
+        ``,
+      ].join("\n");
+
+      let body: string;
+      if (data.analysis) {
+        body = data.analysis;
+      } else if (data.analysisError) {
+        body = `*AI analysis unavailable: ${data.analysisError}*`;
+      } else {
+        body = "*AI analysis not available*";
+      }
+
+      const footer = data.tokensUsed
+        ? `\n\n*Tokens used: ${data.tokensUsed} · Scanned: ${data.scannedAt ?? ""}*`
+        : "";
+
+      return { content: [{ type: "text", text: header + body + footer }] };
+    }
+
+    case "analyze_wallet": {
+      const parsed = AnalyzeWalletSchema.safeParse(args);
+      if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
+      const { address, label } = parsed.data;
+
+      const data = await callConvex("/wallet/analyze", "POST", { address, label }, "analyze_wallet") as {
+        address?: string;
+        label?: string;
+        totalUsd?: number;
+        holdings?: Array<{ token: string; balance: number; valueUsd: number | null; pct: number | null }>;
+        profile?: string;
+        analysis?: string | null;
+        analysisError?: string;
+        error?: string;
+      };
+
+      if (data.error) return { content: [{ type: "text", text: `Wallet analysis failed: ${data.error}` }], isError: true };
+
+      const total = (data.totalUsd ?? 0).toFixed(2);
+      const walletLabel = label ? ` — ${label}` : "";
+      const topHoldings = (data.holdings ?? [])
+        .slice(0, 8)
+        .map(h => `• **${h.token}**: $${(h.valueUsd ?? 0).toFixed(2)}${h.pct != null ? ` (${h.pct}%)` : ""}`)
+        .join("\n");
+
+      const profileLine = data.profile ? `**Profile:** ${data.profile}\n` : "";
+
+      const header = [
+        `**Wallet Analysis**${walletLabel}`,
+        `\`${address}\``,
+        `**Portfolio value:** $${total}`,
+        ``,
+        profileLine,
+        `**Holdings:**`,
+        topHoldings || "No token holdings found.",
+        ``,
+      ].join("\n");
+
+      const body = data.analysis ?? (data.analysisError ? `*AI analysis unavailable: ${data.analysisError}*` : "*AI analysis not available*");
+
+      return { content: [{ type: "text", text: header + body }] };
+    }
+
+    case "get_defi_yields": {
+      const parsed = DefiYieldsSchema.safeParse(args ?? {});
+      if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
+
+      const { token, minApy = 1, limit = 20 } = parsed.data;
+
+      let pools: any[];
+      try {
+        const res = await fetch("https://yields.llama.fi/pools", { signal: AbortSignal.timeout(15_000) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json() as any;
+        pools = data.data ?? [];
+      } catch (e: any) {
+        return { content: [{ type: "text", text: `DeFiLlama fetch failed: ${e.message}` }], isError: true };
+      }
+
+      // Filter to Base chain
+      let filtered = pools.filter((p: any) => p.chain === "Base");
+
+      // Filter by token if specified
+      if (token) {
+        const upper = token.toUpperCase();
+        filtered = filtered.filter((p: any) =>
+          (p.symbol ?? "").toUpperCase().includes(upper) ||
+          (p.underlyingTokens ?? []).some((t: string) => t.toUpperCase().includes(upper))
+        );
+      }
+
+      // Filter by minimum APY and remove outliers (>10000% are usually broken)
+      filtered = filtered
+        .filter((p: any) => (p.apy ?? 0) >= minApy && (p.apy ?? 0) <= 10_000)
+        .sort((a: any, b: any) => (b.apy ?? 0) - (a.apy ?? 0))
+        .slice(0, limit);
+
+      if (!filtered.length) {
+        return {
+          content: [{
+            type: "text",
+            text: [
+              `## DeFi Yields on Base`,
+              `No pools found${token ? ` for ${token.toUpperCase()}` : ""} with APY ≥ ${minApy}%.`,
+              ``,
+              `Try lowering \`minApy\` or removing the token filter.`,
+            ].join("\n"),
+          }],
+        };
+      }
+
+      const fmt = (n: number) => n >= 1_000_000_000 ? `$${(n / 1_000_000_000).toFixed(1)}B`
+        : n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M`
+        : n >= 1_000 ? `$${(n / 1_000).toFixed(0)}K`
+        : `$${n.toFixed(0)}`;
+
+      const lines = [
+        `## DeFi Yields on Base${token ? ` — ${token.toUpperCase()}` : ""}`,
+        `Top ${filtered.length} pools · APY ≥ ${minApy}% · Source: DeFiLlama`,
+        ``,
+        `| # | Pool | Protocol | APY | TVL |`,
+        `|---|------|----------|-----|-----|`,
+      ];
+
+      filtered.forEach((p: any, i: number) => {
+        const apy  = (p.apy ?? 0).toFixed(1);
+        const tvl  = fmt(p.tvlUsd ?? 0);
+        const name = (p.symbol ?? p.pool ?? "—").replace(/-/g, " ");
+        const proj = p.project ?? "—";
+        lines.push(`| ${i + 1} | ${name} | ${proj} | **${apy}%** | ${tvl} |`);
+      });
+
+      lines.push(``, `Use \`swap_tokens\` to position, then deposit via the protocol's UI. Always check smart contract risk before depositing.`);
+
+      return { content: [{ type: "text", text: lines.join("\n") }] };
     }
 
     default:

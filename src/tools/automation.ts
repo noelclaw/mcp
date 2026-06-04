@@ -48,6 +48,21 @@ export const AUTOMATION_TOOLS: Tool[] = [
       required: ["automationId"],
     },
   },
+  {
+    name: "run_automation",
+    description:
+      "Trigger an automation immediately — regardless of its schedule or trigger condition. " +
+      "Use to test an automation after creating it, or to run a one-off DCA/swap/alert right now. " +
+      "The automation must be active (not paused or deleted). " +
+      "Get the ID from list_automations.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        automationId: { type: "string", description: "Automation ID to run now (from list_automations)" },
+      },
+      required: ["automationId"],
+    },
+  },
 ];
 
 const CreateAutomationSchema = z.object({ rawInput: z.string().min(1) });
@@ -139,6 +154,31 @@ export async function handleAutomationTool(name: string, args: unknown): Promise
         if (r.error) lines.push(`   ⚠️ ${r.error}`);
       }
       return { content: [{ type: "text", text: lines.join("\n") }] };
+    }
+
+    case "run_automation": {
+      const parsed = AutomationIdSchema.safeParse(args);
+      if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: automationId ${parsed.error.issues[0].message}` }], isError: true };
+      const data = await callConvex("/automations/run", "POST", { automationId: parsed.data.automationId }, "run_automation");
+      if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
+
+      const statusIcon: Record<string, string> = { success: "✅", failed: "❌", skipped: "⏭️" };
+      const icon = statusIcon[data.status] ?? "⚡";
+      const spent = data.amountUsd != null ? ` · $${Number(data.amountUsd).toFixed(2)} spent` : "";
+      const txLine = data.txHash ? `\nTx: https://basescan.org/tx/${data.txHash}` : "";
+
+      return {
+        content: [{
+          type: "text",
+          text: [
+            `${icon} **Automation triggered: ${data.status ?? "executed"}**${spent}`,
+            data.message ?? "",
+            txLine,
+            ``,
+            `Use \`get_automation_runs automationId: "${parsed.data.automationId}"\` to see full history.`,
+          ].filter(Boolean).join("\n"),
+        }],
+      };
     }
 
     default:

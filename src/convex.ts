@@ -53,7 +53,8 @@ export async function callConvex(path: string, method: string, body?: unknown, t
   const paymentHeader = process.env.NOELCLAW_PAYMENT_HEADER;
   if (paymentHeader) headers["X-Payment"] = paymentHeader;
 
-  // BYOK headers
+  // BYOK headers — user pays for their own AI/service costs
+  if (process.env.ANTHROPIC_API_KEY) headers["X-User-Anthropic-Key"] = process.env.ANTHROPIC_API_KEY;
   if (process.env.GROK_API_KEY) headers["X-User-Grok-Key"] = process.env.GROK_API_KEY;
   if (process.env.BANKR_API_KEY) headers["X-User-Bankr-Key"] = process.env.BANKR_API_KEY;
   if (process.env.TELEGRAM_BOT_TOKEN) headers["X-User-Telegram-Token"] = process.env.TELEGRAM_BOT_TOKEN;

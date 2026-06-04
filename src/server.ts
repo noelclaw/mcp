@@ -16,6 +16,8 @@ import { AGENT_TOOLS, handleAgentTool } from "./tools/agents.js";
 import { SCANNER_TOOLS, handleScannerTool } from "./tools/scanner.js";
 import { CODER_TOOLS, handleCoderTool } from "./tools/coder.js";
 import { BASE_TOOLS, handleBaseTool } from "./tools/base.js";
+import { MEMORY_TOOLS, handleMemoryTool } from "./tools/memory.js";
+import { OS_TOOLS, handleOsTool } from "./tools/os.js";
 
 const PRIVATE_KEY_RESPONSE = {
   content: [{
@@ -35,25 +37,48 @@ function containsSensitiveRequest(args: unknown): boolean {
 }
 
 export const ALL_TOOLS = [
-  ...MARKET_TOOLS,       // 2 — get_market_data, get_token_data
-  ...INSIGHT_TOOLS,      // 1 — ask_noel
-  ...DEFI_TOOLS,         // 5 — get_portfolio, estimate_swap, swap_tokens, send_token, scan_wallet
-  ...AUTOMATION_TOOLS,   // 5 — create, list, pause, delete, get_runs
-  ...SWARM_TOOLS,        // 6 — start, stop, status, read/write memory, scores
+  ...MARKET_TOOLS,       // 5 — get_market_data, get_token_data, compare_tokens, market_overview, token_history
+  ...INSIGHT_TOOLS,      // 3 — ask_noel, market_thesis, trade_plan
+  ...DEFI_TOOLS,         // 7 — get_portfolio, estimate_swap, swap_tokens, send_token, scan_wallet, analyze_wallet, get_defi_yields
+  ...AUTOMATION_TOOLS,   // 6 — create, list, pause, delete, get_runs, run
+  ...SWARM_TOOLS,        // 13 — start, stop, status, read/write memory, scores, research, brief, trigger_agent, broadcast, pulse, reflect, watch
   ...FRAMEWORK_TOOLS,    // 6 — task packets, playbooks, sentinel, ledger
-  ...VAULT_TOOLS,        // 7 — save, read, list, search, history, diff, export
+  ...VAULT_TOOLS,        // 15 — save, read, list, search, history, diff, export, store_credential, get_credential, publish, explore, pin, delete, link, tag
   ...WALLET_TOOLS,       // 2 — get_wallet_address, set_telegram
   ...MIROSHARK_TOOLS,    // 3 — simulate, status, stop
-  ...HUMANIZER_TOOLS,    // 1 — humanize_text
+  ...HUMANIZER_TOOLS,    // 3 — humanize_text, write_thread, write_post
   ...AGENT_TOOLS,        // 2 — list_agents, hire_agent
-  ...SCANNER_TOOLS,      // 3 — score_token, check_token, scan_dips
-  ...CODER_TOOLS,        // 6 — scaffold_project, generate_component, generate_contract, audit_contract, explain_code, review_code
+  ...SCANNER_TOOLS,      // 4 — score_token, check_token, scan_dips, scan_momentum
+  ...CODER_TOOLS,        // 7 — scaffold_project, generate_component, generate_contract, audit_contract, explain_code, review_code, generate_mcp_skill
   ...BASE_TOOLS,         // 4 — query_vaults, list_markets, prepare_deposit, chain_stats
-  // total: 53
+  ...MEMORY_TOOLS,       // 7 — memory_add, memory_search, memory_context, memory_profile, memory_list, memory_delete, memory_insight
+  ...OS_TOOLS,           // 3 — noel_status, noel_boot, noel_shutdown
+  // total: 90
 ];
 
+// Build O(1) dispatch map at startup — avoids sequential chained awaits per call
+type Handler = (name: string, args: unknown) => Promise<import("./types.js").ToolResult | null>;
+const HANDLER_MAP = new Map<string, Handler>([
+  ...MARKET_TOOLS.map(t      => [t.name, handleMarketTool]      as [string, Handler]),
+  ...DEFI_TOOLS.map(t        => [t.name, handleDefiTool]        as [string, Handler]),
+  ...AUTOMATION_TOOLS.map(t  => [t.name, handleAutomationTool]  as [string, Handler]),
+  ...SWARM_TOOLS.map(t       => [t.name, handleSwarmTool]       as [string, Handler]),
+  ...FRAMEWORK_TOOLS.map(t   => [t.name, handleFrameworkTool]   as [string, Handler]),
+  ...VAULT_TOOLS.map(t       => [t.name, handleVaultTool]       as [string, Handler]),
+  ...WALLET_TOOLS.map(t      => [t.name, handleWalletTool]      as [string, Handler]),
+  ...INSIGHT_TOOLS.map(t     => [t.name, handleInsightTool]     as [string, Handler]),
+  ...MIROSHARK_TOOLS.map(t   => [t.name, handleMirosharkTool]   as [string, Handler]),
+  ...HUMANIZER_TOOLS.map(t   => [t.name, handleHumanizerTool]   as [string, Handler]),
+  ...AGENT_TOOLS.map(t       => [t.name, handleAgentTool]       as [string, Handler]),
+  ...SCANNER_TOOLS.map(t     => [t.name, handleScannerTool]     as [string, Handler]),
+  ...CODER_TOOLS.map(t       => [t.name, handleCoderTool]       as [string, Handler]),
+  ...BASE_TOOLS.map(t        => [t.name, handleBaseTool]        as [string, Handler]),
+  ...MEMORY_TOOLS.map(t      => [t.name, handleMemoryTool]      as [string, Handler]),
+  ...OS_TOOLS.map(t           => [t.name, handleOsTool]           as [string, Handler]),
+]);
+
 export const server = new Server(
-  { name: "noelclaw", version: "2.1.0" },
+  { name: "noelclaw", version: "2.4.0" },
   { capabilities: { tools: {} } }
 );
 
@@ -64,25 +89,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   if (containsSensitiveRequest(args)) return PRIVATE_KEY_RESPONSE;
 
+  const handler = HANDLER_MAP.get(name);
+  if (!handler) {
+    return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
+  }
+
   try {
-    const result =
-      await handleMarketTool(name, args) ??
-      await handleDefiTool(name, args) ??
-      await handleAutomationTool(name, args) ??
-      await handleSwarmTool(name, args) ??
-      await handleFrameworkTool(name, args) ??
-      await handleVaultTool(name, args) ??
-      await handleWalletTool(name, args) ??
-      await handleInsightTool(name, args) ??
-      await handleMirosharkTool(name, args) ??
-      await handleHumanizerTool(name, args) ??
-      await handleAgentTool(name, args) ??
-      await handleScannerTool(name, args) ??
-      await handleCoderTool(name, args) ??
-      await handleBaseTool(name, args);
-
+    const result = await handler(name, args);
     if (result) return result;
-
     return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
   } catch (err: any) {
     if (err instanceof PaymentRequiredError) {
@@ -99,7 +113,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           `   (replace \`<txHash>\` with the actual transaction hash)`,
           `4. Retry the tool call`, ``,
           "**Or bypass with a session token:**",
-          "Set `NOELCLAW_SESSION_TOKEN` with your Noelclaw session token from noelclaw.xyz",
+          "Set `NOELCLAW_SESSION_TOKEN` with your Noelclaw session token from noelclaw.com",
         ] : []),
       ];
       return { content: [{ type: "text", text: lines.join("\n") }], isError: true };

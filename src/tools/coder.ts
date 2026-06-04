@@ -1,10 +1,8 @@
 import { z } from "zod";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
+import { callLLM } from "../llm.js";
 
 type ToolResult = { content: Array<{ type: "text"; text: string }>; isError?: boolean };
-
-const BANKR_LLM_URL = "https://llm.bankr.bot/v1/chat/completions";
-const BANKR_MODEL   = process.env.BANKR_MODEL ?? "grok-3";
 
 const CODER_SYSTEM = `You are Noel Coder — an expert software engineer embedded in the Noelclaw AI OS on Base chain.
 You specialize in:
@@ -21,33 +19,6 @@ Rules:
 - For React: use TypeScript, functional components, Tailwind CSS.
 - For MCP tools: follow the Noelclaw pattern (Zod schema, handler returns ToolResult | null).
 - Never include secrets or private keys in output.`;
-
-async function callLLM(systemPrompt: string, userPrompt: string, maxTokens = 4096): Promise<string> {
-  const key = process.env.BANKR_API_KEY;
-  if (!key) throw new Error("BANKR_API_KEY not set — add it to your .env");
-
-  const res = await fetch(BANKR_LLM_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-API-Key": key },
-    body: JSON.stringify({
-      model:    BANKR_MODEL,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user",   content: userPrompt },
-      ],
-      max_tokens: maxTokens,
-    }),
-    signal: AbortSignal.timeout(90_000),
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`LLM error ${res.status}: ${body.slice(0, 200)}`);
-  }
-
-  const data = await res.json() as any;
-  return data.choices?.[0]?.message?.content ?? "";
-}
 
 function ok(text: string): ToolResult {
   return { content: [{ type: "text", text }] };
@@ -182,6 +153,35 @@ export const CODER_TOOLS: Tool[] = [
   },
 
   {
+    name: "generate_mcp_skill",
+    description:
+      "Generate a complete Claude Code skill (.md file) from a description. " +
+      "Skills are slash-command workflows that run inside Claude Code — they can call tools, " +
+      "loop, delegate to subagents, and have persistent behavior. " +
+      "Returns a ready-to-use .md file you can drop into your .claude/skills/ directory. " +
+      "Use this to automate repetitive Claude Code workflows without writing TypeScript.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        description: {
+          type: "string",
+          description: "What the skill should do — be specific about inputs, outputs, and any tools it should use",
+        },
+        name: {
+          type: "string",
+          description: "Skill name in kebab-case, e.g. 'daily-standup', 'code-review', 'deploy-check'",
+        },
+        tools: {
+          type: "array",
+          items: { type: "string" },
+          description: "Optional: list of Claude Code tools or MCP tools the skill should use, e.g. ['Bash', 'Read', 'memory_search']",
+        },
+      },
+      required: ["description", "name"],
+    },
+  },
+
+  {
     name: "review_code",
     description:
       "Review and improve a piece of code. Returns the improved version with a summary of changes. " +
@@ -241,6 +241,12 @@ const ReviewSchema = z.object({
   code: z.string().min(1),
   language: z.string().optional(),
   goals: z.string().optional(),
+});
+
+const McpSkillSchema = z.object({
+  description: z.string().min(10),
+  name: z.string().min(1).regex(/^[a-z0-9-]+$/, "must be kebab-case"),
+  tools: z.array(z.string()).optional(),
 });
 
 export async function handleCoderTool(name: string, args: unknown): Promise<ToolResult | null> {
@@ -404,6 +410,38 @@ export async function handleCoderTool(name: string, args: unknown): Promise<Tool
         return ok(response);
       } catch (e: any) {
         return err(`review_code failed: ${e.message}`);
+      }
+    }
+
+    case "generate_mcp_skill": {
+      const p = McpSkillSchema.safeParse(args);
+      if (!p.success) return err(`Invalid input: ${p.error.message}`);
+      const { description, name: skillName, tools = [] } = p.data;
+
+      const prompt =
+        `Generate a complete Claude Code skill (.md file) for the following workflow:\n\n` +
+        `Skill name: /${skillName}\n` +
+        `Description: ${description}\n` +
+        (tools.length ? `Tools to use: ${tools.join(", ")}\n` : "") +
+        `\n` +
+        `Claude Code skill format rules:\n` +
+        `- The file is a markdown document that serves as a system prompt for a Claude Code slash command\n` +
+        `- It should start with a brief description of what the skill does\n` +
+        `- Include an "## Input" section explaining what arguments the skill accepts (if any)\n` +
+        `- Include a "## Steps" section with numbered, concrete steps\n` +
+        `- Include a "## Output" section describing what the skill produces\n` +
+        `- Steps can reference tool calls like "Use the Bash tool to run X" or "Use memory_search to find Y"\n` +
+        `- Steps can reference conditional logic and loops\n` +
+        `- Keep it under 200 lines — skills should be focused, not monolithic\n` +
+        `- Write in imperative second person ("Run...", "Check...", "If X, then...")\n` +
+        `- Do NOT include markdown fences around the output — output the raw .md content directly\n\n` +
+        `Output only the .md file content, ready to save as .claude/skills/${skillName}.md`;
+
+      try {
+        const response = await callLLM(CODER_SYSTEM, prompt, 2000);
+        return ok(`# /${skillName} skill — save to .claude/skills/${skillName}.md\n\n---\n\n${response}`);
+      } catch (e: any) {
+        return err(`generate_mcp_skill failed: ${e.message}`);
       }
     }
 

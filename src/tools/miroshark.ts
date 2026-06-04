@@ -1,5 +1,7 @@
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { ToolResult } from "../types.js";
+import { callLLM } from "../llm.js";
+import { callConvex } from "../convex.js";
 
 const CONVEX_SITE = process.env.NOELCLAW_CONVEX_URL ?? "https://api.noelclaw.com";
 
@@ -7,8 +9,8 @@ export const MIROSHARK_TOOLS: Tool[] = [
   {
     name: "miroshark_simulate",
     description:
-      "Run a MiroShark multi-agent simulation. Describe any scenario in plain English — market crashes, policy changes, social events — and get back a running simulation with AI agents acting as market participants, analysts, and social actors. " +
-      "Handles the full setup automatically (knowledge graph, agent profiles). Returns a simulation_id to poll with miroshark_status.",
+      "Simulate any scenario using MiroShark multi-agent AI. Use this when the user asks to simulate, model, or explore 'what happens if' — market crashes, regulations, social events, macro changes. " +
+      "AI agents act as traders, analysts, journalists, and social actors. Returns a simulation_id to track progress.",
     inputSchema: {
       type: "object",
       properties: {
@@ -181,6 +183,9 @@ export async function handleMirosharkTool(name: string, args: unknown): Promise<
     }
 
     const simId: string = a.simulation_id.trim();
+    if (!/^[a-zA-Z0-9_-]{5,100}$/.test(simId)) {
+      return { content: [{ type: "text", text: "Invalid simulation_id format." }], isError: true };
+    }
 
     try {
       // Check run status first
@@ -261,31 +266,87 @@ export async function handleMirosharkTool(name: string, args: unknown): Promise<
       }
 
       if (runnerStatus === "completed" || runnerStatus === "stopped") {
-        // Fetch a sample of agent actions for the summary
         const actionsData = await miroJson(
-          `/miroshark/api/simulation/${simId}/actions?limit=10`,
+          `/miroshark/api/simulation/${simId}/actions?limit=50`,
           "GET",
         ).catch(() => ({ actions: [] }));
 
         const actions: any[] = actionsData?.actions ?? [];
-        const lines = [
-          `**MiroShark \`${simId}\`** — ${runnerStatus}`,
-          ``,
-          `Rounds completed: ${runStatus.current_round ?? "?"}`,
-          `Total actions: ${runStatus.total_actions_count ?? actions.length}`,
-        ];
+        const totalActions = runStatus.total_actions_count ?? actions.length;
+        const rounds = runStatus.current_round ?? "?";
 
-        if (actions.length > 0) {
-          lines.push("", "**Sample agent activity:**");
-          for (const act of actions.slice(0, 8)) {
+        const ACTION_EMOJI: Record<string, string> = {
+          tweet: "🐦", post: "📝", sell: "📉", buy: "📈",
+          article: "📰", comment: "💬", alert: "🚨", analyze: "🔍",
+        };
+
+        // Format agent feed
+        const feed = actions.slice(0, 20).map((act: any) => {
+          const who = act.agent_name ?? act.agent_id ?? "agent";
+          const what = (act.action_type ?? act.type ?? "action").toLowerCase();
+          const emoji = ACTION_EMOJI[what] ?? "•";
+          const content = act.content ?? act.text ?? "";
+          return `${emoji} **${who}** [${what}]${content ? `: ${String(content).slice(0, 120)}` : ""}`;
+        });
+
+        // Generate AI brief from agent activity
+        let brief = "";
+        if (actions.length > 0 && (process.env.ANTHROPIC_API_KEY || process.env.BANKR_API_KEY)) {
+          const activitySummary = actions.slice(0, 30).map((act: any) => {
             const who = act.agent_name ?? act.agent_id ?? "agent";
             const what = act.action_type ?? act.type ?? "action";
             const content = act.content ?? act.text ?? "";
-            lines.push(`• **${who}** [${what}]${content ? `: ${String(content).slice(0, 80)}` : ""}`);
+            return `${who} [${what}]: ${String(content).slice(0, 150)}`;
+          }).join("\n");
+
+          try {
+            brief = await callLLM(
+              "You are a market intelligence analyst. Given a MiroShark multi-agent simulation log, extract: 1) Key market sentiment, 2) Dominant narrative, 3) Top 3 agent behaviors, 4) Outlook. Be concise and direct — max 150 words.",
+              `Simulation activity log:\n${activitySummary}`,
+              400,
+            );
+          } catch {
+            // brief stays empty — non-critical
           }
         }
 
-        lines.push("", `Full transcript: \`miroshark_status\` returns results above.`);
+        // Auto-save to vault if brief was generated
+        let savedToVault = false;
+        if (brief) {
+          try {
+            await callConvex("/vault/save", "POST", {
+              type: "research",
+              title: `MiroShark: ${a.scenario?.slice(0, 80) ?? simId}`,
+              content: brief,
+              key: `miroshark-${simId.slice(0, 8)}`,
+              agentId: "miroshark",
+              tags: ["miroshark", "simulation", "research"],
+              commitMsg: "miroshark auto-save",
+            }, "vault_save");
+            savedToVault = true;
+          } catch {
+            // non-critical
+          }
+        }
+
+        const lines = [
+          `**MiroShark \`${simId}\`** — ${runnerStatus}`,
+          `Rounds: ${rounds} · Actions: ${totalActions} agents`,
+          "",
+        ];
+
+        if (brief) {
+          lines.push("**🧠 AI Brief:**", brief, "");
+        }
+
+        if (feed.length > 0) {
+          lines.push(`**Agent Feed** (${Math.min(actions.length, 20)} of ${totalActions}):`);
+          lines.push(...feed);
+        }
+
+        if (savedToVault) {
+          lines.push("", `_Findings auto-saved to vault as \`miroshark-${simId.slice(0, 8)}\`_`);
+        }
 
         return { content: [{ type: "text", text: lines.join("\n") }] };
       }
@@ -312,6 +373,9 @@ export async function handleMirosharkTool(name: string, args: unknown): Promise<
       return { content: [{ type: "text", text: "simulation_id is required" }], isError: true };
     }
     const simId: string = a.simulation_id.trim();
+    if (!/^[a-zA-Z0-9_-]{5,100}$/.test(simId)) {
+      return { content: [{ type: "text", text: "Invalid simulation_id format." }], isError: true };
+    }
     try {
       await miroJson(`/miroshark/api/simulation/${simId}/stop`, "POST", {});
       return { content: [{ type: "text", text: `⏹️ Simulation \`${simId}\` stopped.` }] };

@@ -8,7 +8,7 @@ export const BASE_TOOLS: Tool[] = [
   {
     name: "base_query_vaults",
     description:
-      "List Morpho yield vaults on Base sorted by APY. Shows vault name, asset, current APY, and total deposits. Use this to find the best yield opportunities on Base.",
+      "Find the best yield/earning opportunities on Base chain using Morpho vaults. Use this when the user asks about yield farming, APY, best rates to earn, where to put USDC, or passive income on Base.",
     inputSchema: {
       type: "object",
       properties: {
@@ -27,7 +27,7 @@ export const BASE_TOOLS: Tool[] = [
   {
     name: "base_list_markets",
     description:
-      "List Moonwell lending/borrowing markets on Base. Shows supply APY, borrow APY, total liquidity, and utilization rate for each asset.",
+      "Get lending and borrowing rates on Base chain via Moonwell. Use this when the user asks about borrow rates, lending rates, interest rates, supply APY, or how much they can earn/pay lending on Base.",
     inputSchema: {
       type: "object",
       properties: {
@@ -65,7 +65,7 @@ export const BASE_TOOLS: Tool[] = [
   {
     name: "base_chain_stats",
     description:
-      "Get real-time Base chain stats: ETH price, gas price in gwei, and latest block info.",
+      "Get real-time Base chain stats: current ETH price in USD, gas price in gwei, and latest block number. Use this when the user asks about gas fees, ETH price, Base network status, or current block.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -93,8 +93,8 @@ async function fetchMorphoVaults(asset?: string, limit = 10): Promise<string> {
   const gql = `{
     vaults(
       where: { chainId_in: [8453] }
-      orderBy: "state_netApy"
-      orderDirection: "desc"
+      orderBy: NetApy
+      orderDirection: Desc
       first: 50
     ) {
       items {
@@ -114,8 +114,15 @@ async function fetchMorphoVaults(asset?: string, limit = 10): Promise<string> {
   });
 
   if (!res.ok) throw new Error(`Morpho API error: ${res.status}`);
-  const data = await res.json();
+  const data = await res.json() as any;
   let vaults: any[] = data?.data?.vaults?.items ?? [];
+
+  // Filter out test/spam vaults: min $10k TVL, max 500% APY
+  vaults = vaults.filter((v: any) => {
+    const tvl = v.state?.totalAssetsUsd ?? 0;
+    const apy = v.state?.netApy ?? v.state?.apy ?? 0;
+    return tvl >= 10_000 && apy <= 5;
+  });
 
   if (asset) {
     vaults = vaults.filter((v: any) =>
@@ -144,23 +151,26 @@ async function fetchMoonwellMarkets(asset?: string): Promise<string> {
   });
 
   if (!res.ok) throw new Error(`Moonwell API error: ${res.status}`);
-  const data = await res.json();
-  let markets: any[] = data?.data ?? data?.markets ?? [];
+  const data = await res.json() as any;
+  let markets: any[] = Array.isArray(data) ? data : (data?.data ?? data?.markets ?? []);
+
+  // Filter deprecated markets
+  markets = markets.filter((m: any) => !m.deprecated);
 
   if (asset) {
     markets = markets.filter((m: any) =>
-      (m.underlyingSymbol ?? m.symbol ?? "").toLowerCase().includes(asset.toLowerCase())
+      (m.asset ?? m.underlyingSymbol ?? m.symbol ?? "").toLowerCase().includes(asset.toLowerCase())
     );
   }
 
   if (!markets.length) return "No markets found.";
 
   const lines = markets.slice(0, 15).map((m: any, i: number) => {
-    const symbol     = m.underlyingSymbol ?? m.symbol ?? "?";
-    const supplyApy  = pct((m.supplyApy ?? m.supplyRate ?? 0));
-    const borrowApy  = pct((m.borrowApy ?? m.borrowRate ?? 0));
-    const liquidity  = fmt(m.totalSupplyUsd ?? m.totalSupply ?? 0);
-    const util       = m.utilization != null ? `${(m.utilization * 100).toFixed(1)}%` : "—";
+    const symbol    = m.asset ?? m.underlyingSymbol ?? m.symbol ?? "?";
+    const supplyApy = pct((m.baseSupplyApy ?? m.supplyApy ?? m.supplyRate ?? 0) / 100);
+    const borrowApy = pct((m.baseBorrowApy ?? m.borrowApy ?? m.borrowRate ?? 0) / 100);
+    const liquidity = fmt(m.totalSupplyUsd ?? m.liquidityUsd ?? m.totalSupply ?? 0);
+    const util      = m.utilization != null ? `${(m.utilization * 100).toFixed(1)}%` : "—";
     return `${i + 1}. ${symbol}\n   Supply APY: ${supplyApy}  Borrow APY: ${borrowApy}  Liquidity: ${liquidity}  Util: ${util}`;
   });
 
@@ -178,18 +188,18 @@ async function fetchBaseStats(): Promise<string> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_blockNumber", params: [] }),
       signal: AbortSignal.timeout(8000),
-    }).then(r => r.json()).catch(() => null),
+    }).then(r => r.json() as Promise<any>).catch(() => null),
 
     fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd", {
       signal: AbortSignal.timeout(8000),
-    }).then(r => r.json()).catch(() => null),
+    }).then(r => r.json() as Promise<any>).catch(() => null),
 
     fetch(rpc, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "eth_gasPrice", params: [] }),
       signal: AbortSignal.timeout(8000),
-    }).then(r => r.json()).catch(() => null),
+    }).then(r => r.json() as Promise<any>).catch(() => null),
   ]);
 
   const block    = blockRes?.result ? parseInt(blockRes.result, 16) : "—";
@@ -207,8 +217,8 @@ async function prepareDeposit(vaultName: string | undefined, asset: string, amou
   const gql = `{
     vaults(
       where: { chainId_in: [8453] }
-      orderBy: "state_netApy"
-      orderDirection: "desc"
+      orderBy: NetApy
+      orderDirection: Desc
       first: 100
     ) {
       items {
@@ -228,7 +238,7 @@ async function prepareDeposit(vaultName: string | undefined, asset: string, amou
   });
 
   if (!res.ok) throw new Error(`Morpho API error: ${res.status}`);
-  const data = await res.json();
+  const data = await res.json() as any;
   let vaults: any[] = data?.data?.vaults?.items ?? [];
 
   // Filter by asset first

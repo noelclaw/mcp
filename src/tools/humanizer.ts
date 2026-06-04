@@ -1,8 +1,71 @@
 import { z } from "zod";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
+import { callLLM } from "../llm.js";
 import { ToolResult } from "../types.js";
 
 export const HUMANIZER_TOOLS: Tool[] = [
+  {
+    name: "write_thread",
+    description:
+      "Write a viral Twitter/X thread on any crypto or tech topic. " +
+      "Returns a numbered thread (1/, 2/, ...) with a hook tweet, " +
+      "3-7 content tweets, and a strong closer with CTA. " +
+      "Written in a direct, punchy voice — no fluff, no AI tells. " +
+      "Optionally provide your own voice sample to match your style.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        topic: {
+          type: "string",
+          description: "The topic or angle for the thread, e.g. 'why Base is winning', 'how I use MCP agents for DeFi research'",
+        },
+        tone: {
+          type: "string",
+          enum: ["alpha", "educational", "opinion", "story"],
+          description: "Thread tone: 'alpha' (edge/insight), 'educational' (explainer), 'opinion' (hot take), 'story' (personal narrative). Default: opinion.",
+        },
+        tweets: {
+          type: "number",
+          description: "Number of tweets in the thread, 4–12 (default: 7)",
+        },
+        voice_sample: {
+          type: "string",
+          description: "Optional: paste 1-3 of your existing tweets to match your voice",
+        },
+      },
+      required: ["topic"],
+    },
+  },
+  {
+    name: "write_post",
+    description:
+      "Write a single viral-style crypto/tech post for Twitter/X. " +
+      "Returns one punchy post under 280 characters (or up to 500 with long-form enabled). " +
+      "Hooks in the first line, delivers the insight, ends with impact. No AI fluff.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        topic: {
+          type: "string",
+          description: "What to post about — a thought, observation, alpha, or hot take",
+        },
+        style: {
+          type: "string",
+          enum: ["hook", "hot-take", "alpha", "question", "observation"],
+          description: "Post style. Default: hook.",
+        },
+        long: {
+          type: "boolean",
+          description: "Allow up to 500 chars (long-form post). Default: false (280 chars max)",
+        },
+        voice_sample: {
+          type: "string",
+          description: "Optional: a sample of your writing to match your voice",
+        },
+      },
+      required: ["topic"],
+    },
+  },
   {
     name: "humanize_text",
     description:
@@ -28,12 +91,24 @@ export const HUMANIZER_TOOLS: Tool[] = [
 ];
 
 const HumanizerSchema = z.object({
-  text: z.string().min(1),
-  voice_sample: z.string().optional(),
+  text: z.string().min(1).max(20_000),
+  voice_sample: z.string().max(5_000).optional(),
 });
 
-const BANKR_LLM_URL = "https://llm.bankr.bot/v1/chat/completions";
-const BANKR_MODEL = process.env.BANKR_MODEL ?? "grok-3";
+const WriteThreadSchema = z.object({
+  topic:        z.string().min(3).max(500),
+  tone:         z.enum(["alpha", "educational", "opinion", "story"]).optional(),
+  tweets:       z.number().int().min(4).max(12).optional(),
+  voice_sample: z.string().max(5_000).optional(),
+});
+
+const WritePostSchema = z.object({
+  topic:        z.string().min(3).max(500),
+  style:        z.enum(["hook", "hot-take", "alpha", "question", "observation"]).optional(),
+  long:         z.boolean().optional(),
+  voice_sample: z.string().max(5_000).optional(),
+});
+
 
 const HUMANIZER_SYSTEM = `You are a text editor that removes signs of AI-generated writing.
 
@@ -83,7 +158,85 @@ PROCESS:
 
 If a voice sample is provided, match its tone, rhythm, and vocabulary. Otherwise use direct, opinionated, natural prose.`;
 
+const THREAD_SYSTEM = `You are a crypto Twitter ghostwriter who writes threads that go viral. Your style: direct, no fluff, confident without being cringe. You understand DeFi, on-chain data, narratives, and market structure. You write like a smart practitioner, not a content creator.
+
+Rules:
+- First tweet is the hook — bold claim or surprising insight. Must make people stop scrolling.
+- Middle tweets: each one standalone insight. No "in this thread I'll explain" filler.
+- Last tweet: the payoff. Strong closer, optional CTA (follow, RT, reply) — one CTA max.
+- Number format: 1/ 2/ 3/ etc. Each tweet on its own line, separated by blank line.
+- Under 280 chars per tweet unless it genuinely needs more (max 500).
+- No em dashes, no "delve", no "landscape", no "it's worth noting".
+- No hashtags unless they're actually used. No emojis unless they add meaning.
+- Write in the user's voice if a sample is provided.`;
+
+const POST_SYSTEM = `You are a crypto Twitter ghostwriter. Write one punchy, high-impact post. Direct. No fluff. Hook in the first line. No em dashes, no AI vocabulary. Write like a smart practitioner with an edge.`;
+
 export async function handleHumanizerTool(name: string, args: unknown): Promise<ToolResult | null> {
+  if (name === "write_thread") {
+    const parsed = WriteThreadSchema.safeParse(args);
+    if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
+
+    const { topic, tone = "opinion", tweets = 7, voice_sample } = parsed.data;
+
+    const toneGuides: Record<string, string> = {
+      alpha:       "Share non-obvious insights or edge. Act like you have information most people don't.",
+      educational: "Explain a concept clearly. Assume smart but non-expert reader.",
+      opinion:     "Take a clear position. Defend it with reasoning. Don't hedge.",
+      story:       "Tell a real story with a beginning, conflict, and lesson. Make it personal and specific.",
+    };
+
+    const prompt = [
+      `Write a ${tweets}-tweet Twitter/X thread on: ${topic}`,
+      ``,
+      `Tone: ${tone} — ${toneGuides[tone]}`,
+      voice_sample ? `Voice sample (match this style):\n${voice_sample}` : "",
+      ``,
+      `Format: number each tweet as 1/ 2/ 3/ etc., separated by blank lines.`,
+      `First tweet = hook. Last tweet = strong closer.`,
+      `Output only the tweets — no intro, no explanation.`,
+    ].filter(Boolean).join("\n");
+
+    try {
+      const output = await callLLM(THREAD_SYSTEM, prompt, 2000);
+      return { content: [{ type: "text", text: output.trim() }] };
+    } catch (err: any) {
+      return { content: [{ type: "text", text: `write_thread error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "write_post") {
+    const parsed = WritePostSchema.safeParse(args);
+    if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
+
+    const { topic, style = "hook", long = false, voice_sample } = parsed.data;
+
+    const styleGuides: Record<string, string> = {
+      hook:        "Strong first line that stops the scroll. Deliver the insight after.",
+      "hot-take":  "Controversial opinion stated plainly. Don't soften it.",
+      alpha:       "Non-obvious market insight written like you're sharing it with one smart friend.",
+      question:    "Ask a sharp, thought-provoking question. Don't answer it.",
+      observation: "One specific thing you noticed that most people missed.",
+    };
+
+    const charLimit = long ? 500 : 280;
+
+    const prompt = [
+      `Write one ${style} post about: ${topic}`,
+      `Style: ${styleGuides[style]}`,
+      `Max length: ${charLimit} characters.`,
+      voice_sample ? `Voice sample:\n${voice_sample}` : "",
+      `Output only the post text — nothing else.`,
+    ].filter(Boolean).join("\n");
+
+    try {
+      const output = await callLLM(POST_SYSTEM, prompt, 300);
+      return { content: [{ type: "text", text: output.trim() }] };
+    } catch (err: any) {
+      return { content: [{ type: "text", text: `write_post error: ${err.message}` }], isError: true };
+    }
+  }
+
   if (name !== "humanize_text") return null;
 
   const parsed = HumanizerSchema.safeParse(args);
@@ -93,44 +246,14 @@ export async function handleHumanizerTool(name: string, args: unknown): Promise<
 
   const { text, voice_sample } = parsed.data;
 
-  const apiKey = process.env.BANKR_API_KEY;
-  if (!apiKey) {
-    return { content: [{ type: "text", text: "BANKR_API_KEY not set — add it to your MCP env config." }], isError: true };
-  }
-
   const userMsg = voice_sample
     ? `VOICE SAMPLE (match this style):\n${voice_sample}\n\n---\n\nTEXT TO HUMANIZE:\n${text}`
     : text;
 
   try {
-    const res = await fetch(BANKR_LLM_URL, {
-      method: "POST",
-      headers: {
-        "X-API-Key": apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: BANKR_MODEL,
-        messages: [
-          { role: "system", content: HUMANIZER_SYSTEM },
-          { role: "user", content: userMsg },
-        ],
-        temperature: 0.7,
-        max_tokens: 4096,
-      }),
-      signal: AbortSignal.timeout(30000),
-    });
-
-    if (!res.ok) {
-      const err = await res.text().catch(() => res.statusText);
-      return { content: [{ type: "text", text: `Bankr LLM error ${res.status}: ${err.slice(0, 200)}` }], isError: true };
-    }
-
-    const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
-    const output = data.choices?.[0]?.message?.content?.trim() ?? "";
+    const output = await callLLM(HUMANIZER_SYSTEM, userMsg, 4096);
     if (!output) return { content: [{ type: "text", text: "Empty response from model" }], isError: true };
-
-    return { content: [{ type: "text", text: output }] };
+    return { content: [{ type: "text", text: output.trim() }] };
   } catch (err: any) {
     return { content: [{ type: "text", text: `Humanizer error: ${err.message}` }], isError: true };
   }

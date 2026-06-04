@@ -1,12 +1,14 @@
 import { z } from "zod";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { callConvex } from "../convex.js";
+import { callLLM } from "../llm.js";
 import { ToolResult } from "../types.js";
+import { searchSupermemory } from "./memory.js";
 
 export const INSIGHT_TOOLS: Tool[] = [
   {
     name: "ask_noel",
-    description: "Ask Noel AI for DeFi analysis, trade ideas, market outlook, and crypto research. Noel has live market context.",
+    description: "Ask Noel AI for opinions, analysis, trade ideas, and market outlook. Use this for subjective questions like 'is now a good time to buy', 'what do you think about ETH', 'give me your analysis'. Do NOT use for factual data like gas price or live prices — use base_chain_stats or get_market_data for those.",
     inputSchema: {
       type: "object",
       properties: {
@@ -24,6 +26,41 @@ export const INSIGHT_TOOLS: Tool[] = [
       required: ["question"],
     },
   },
+  {
+    name: "market_thesis",
+    description:
+      "Generate a structured bull vs bear thesis for any token or market topic. " +
+      "Noel fetches live price/market data then writes a sharp, two-sided analysis: " +
+      "bull case (catalysts, narratives, technicals), bear case (risks, headwinds, red flags), " +
+      "and a net verdict with conviction score 0–10. " +
+      "Use before opening a position or for research on a token you're watching.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        token:   { type: "string", description: "Token symbol or CoinGecko ID, e.g. 'ETH', 'bitcoin', 'AERO'" },
+        context: { type: "string", description: "Optional: extra context — your time horizon, thesis seed, or specific concerns" },
+      },
+      required: ["token"],
+    },
+  },
+  {
+    name: "trade_plan",
+    description:
+      "Build a structured trade plan for any token: entry zone, stop loss, take profit levels, " +
+      "position size recommendation (as % of portfolio), and risk/reward ratio. " +
+      "Based on live price data + Noel's market reading. Returns a ready-to-act plan, not vague advice.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        token:          { type: "string", description: "Token symbol or CoinGecko ID" },
+        side:           { type: "string", enum: ["long", "short"], description: "Trade direction (default: long)" },
+        portfolioSize:  { type: "number", description: "Optional: your portfolio size in USD (for position sizing)" },
+        riskTolerance:  { type: "string", enum: ["conservative", "moderate", "aggressive"], description: "Risk profile (default: moderate)" },
+        timeframe:      { type: "string", description: "Optional: trade timeframe, e.g. 'intraday', 'swing', 'weeks'" },
+      },
+      required: ["token"],
+    },
+  },
 ];
 
 const AskNoelSchema = z.object({
@@ -31,61 +68,190 @@ const AskNoelSchema = z.object({
   messages: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string() })).optional(),
 });
 
-const BANKR_LLM_URL = "https://llm.bankr.bot/v1/chat/completions";
-const BANKR_MODEL = process.env.BANKR_MODEL ?? "grok-3";
+const MarketThesisSchema = z.object({
+  token:   z.string().min(1),
+  context: z.string().optional(),
+});
 
-const NOEL_SYSTEM_PROMPT = `You are Noel, a crypto AI analyst with deep expertise in DeFi, on-chain data, market structure, and trading psychology. You provide sharp, direct analysis — no fluff, no disclaimers. You understand narratives, liquidity flows, whale behavior, and how sentiment drives price. When asked about a token or market, give your honest read with supporting reasoning.`;
+const TradePlanSchema = z.object({
+  token:         z.string().min(1),
+  side:          z.enum(["long", "short"]).optional(),
+  portfolioSize: z.number().positive().optional(),
+  riskTolerance: z.enum(["conservative", "moderate", "aggressive"]).optional(),
+  timeframe:     z.string().optional(),
+});
 
-async function askViaBankr(question: string, messages: Array<{ role: string; content: string }>): Promise<string> {
-  const res = await fetch(BANKR_LLM_URL, {
-    method: "POST",
-    headers: {
-      "X-API-Key": process.env.BANKR_API_KEY!,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: BANKR_MODEL,
-      messages: [
-        { role: "system", content: NOEL_SYSTEM_PROMPT },
-        ...messages,
-        { role: "user", content: question },
-      ],
-      max_tokens: 1024,
-    }),
-    signal: AbortSignal.timeout(30000),
-  });
-  if (!res.ok) {
-    const err = await res.text().catch(() => res.statusText);
-    throw new Error(`Bankr LLM error ${res.status}: ${err.slice(0, 200)}`);
+const NOEL_BASE_PROMPT = `You are Noel, a crypto AI analyst and the core intelligence of the Noelclaw AI Operating System. You have deep expertise in DeFi, on-chain data, market structure, and trading psychology. You provide sharp, direct analysis — no fluff, no disclaimers. You understand narratives, liquidity flows, whale behavior, and how sentiment drives price. When asked about a token or market, give your honest read with supporting reasoning.`;
+
+async function buildSystemPrompt(question: string): Promise<string> {
+  const memories = await searchSupermemory(question, 5);
+  if (!memories.length) return NOEL_BASE_PROMPT;
+
+  const memBlock = memories
+    .map(r => {
+      const title = r.metadata?.title ? `[${r.metadata.title}] ` : "";
+      return `- ${title}${r.content.slice(0, 250).replace(/\n/g, " ")}`;
+    })
+    .join("\n");
+
+  return `${NOEL_BASE_PROMPT}\n\n<user_memory>\nThe following is stored knowledge about this user — use it to personalize your response:\n${memBlock}\n</user_memory>`;
+}
+
+async function fetchCgPrice(token: string): Promise<{ price: number; change24h: number; mcap: number; symbol: string } | null> {
+  try {
+    const id = token.toLowerCase().replace(/ /g, "-");
+    const res = await fetch(
+      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${id}&order=market_cap_desc&per_page=1&page=1`,
+      { signal: AbortSignal.timeout(8_000) }
+    );
+    if (!res.ok) return null;
+    const data = await res.json() as any[];
+    const coin = data[0];
+    if (!coin) return null;
+    return {
+      price:    coin.current_price ?? 0,
+      change24h: coin.price_change_percentage_24h ?? 0,
+      mcap:     coin.market_cap ?? 0,
+      symbol:   coin.symbol?.toUpperCase() ?? token.toUpperCase(),
+    };
+  } catch {
+    return null;
   }
-  const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
-  return data.choices?.[0]?.message?.content ?? "No response from model";
 }
 
 export async function handleInsightTool(name: string, args: unknown): Promise<ToolResult | null> {
-  if (name !== "ask_noel") return null;
+  if (name === "ask_noel") {
+    const parsed = AskNoelSchema.safeParse(args);
+    if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: question ${parsed.error.issues[0].message}` }], isError: true };
 
-  const parsed = AskNoelSchema.safeParse(args);
-  if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: question ${parsed.error.issues[0].message}` }], isError: true };
+    const { question, messages = [] } = parsed.data;
 
-  const { question, messages = [] } = parsed.data;
+    const systemPrompt = await buildSystemPrompt(question);
 
-  // If BANKR_API_KEY is set, call Bankr LLM directly — faster, no Convex hop
-  if (process.env.BANKR_API_KEY) {
+    if (process.env.ANTHROPIC_API_KEY || process.env.BANKR_API_KEY) {
+      try {
+        const history = messages.map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
+        const answer = await callLLM(systemPrompt, question, 1024, history);
+        return { content: [{ type: "text", text: answer }] };
+      } catch (err: any) {
+        // fall through to Convex
+      }
+    }
+
+    const data = await callConvex("/mcp/chat", "POST", {
+      question,
+      agentId: "noel-default",
+      messages,
+      systemPrompt,
+    }, "ask_noel") as { answer?: string };
+    return { content: [{ type: "text", text: data.answer ?? JSON.stringify(data) }] };
+  }
+
+  if (name === "market_thesis") {
+    const parsed = MarketThesisSchema.safeParse(args);
+    if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
+
+    const { token, context } = parsed.data;
+    const priceData = await fetchCgPrice(token);
+
+    const dataCtx = priceData
+      ? `Current price: $${priceData.price.toLocaleString()} | 24h: ${priceData.change24h.toFixed(1)}% | Mcap: $${(priceData.mcap / 1_000_000).toFixed(0)}M`
+      : `(live price data unavailable — use general knowledge)`;
+
+    const prompt = [
+      `Write a structured bull vs bear thesis for ${token.toUpperCase()}.`,
+      ``,
+      `Live market data: ${dataCtx}`,
+      context ? `User context: ${context}` : "",
+      ``,
+      `Output format (use exactly these headers):`,
+      `## ${token.toUpperCase()} Thesis`,
+      `**Current price:** [price] | **24h:** [change]`,
+      ``,
+      `### Bull Case`,
+      `(3-5 specific catalysts, narratives, or technical factors that support upside. Be concrete — no vague "adoption" claims.)`,
+      ``,
+      `### Bear Case`,
+      `(3-5 specific risks, headwinds, or red flags. Include on-chain, macro, and competitive risks if applicable.)`,
+      ``,
+      `### Net Verdict`,
+      `**Conviction:** X/10`,
+      `(2-3 sentences: the deciding factor, the key risk to watch, and your net lean.)`,
+    ].filter(Boolean).join("\n");
+
     try {
-      const answer = await askViaBankr(question, messages);
+      const systemPrompt = await buildSystemPrompt(`${token} ${context ?? ""}`);
+      const answer = await callLLM(systemPrompt, prompt, 1200);
       return { content: [{ type: "text", text: answer }] };
     } catch (err: any) {
-      // Fall through to Convex if Bankr call fails
-      console.error(`Bankr LLM failed, falling back to Convex: ${err.message}`);
+      return { content: [{ type: "text", text: `market_thesis error: ${err.message}` }], isError: true };
     }
   }
 
-  // Fallback: route through Convex backend
-  const data = await callConvex("/mcp/chat", "POST", {
-    question,
-    agentId: "noel-default",
-    messages,
-  }, "ask_noel") as { answer?: string };
-  return { content: [{ type: "text", text: data.answer ?? JSON.stringify(data) }] };
+  if (name === "trade_plan") {
+    const parsed = TradePlanSchema.safeParse(args);
+    if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
+
+    const { token, side = "long", portfolioSize, riskTolerance = "moderate", timeframe } = parsed.data;
+    const priceData = await fetchCgPrice(token);
+
+    const dataCtx = priceData
+      ? `Current price: $${priceData.price.toLocaleString()} | 24h: ${priceData.change24h.toFixed(1)}% | Mcap: $${(priceData.mcap / 1_000_000).toFixed(0)}M`
+      : `(live price data unavailable)`;
+
+    const riskPcts: Record<string, string> = {
+      conservative: "1-2% of portfolio",
+      moderate:     "2-5% of portfolio",
+      aggressive:   "5-10% of portfolio",
+    };
+
+    const prompt = [
+      `Build a structured ${side.toUpperCase()} trade plan for ${token.toUpperCase()}.`,
+      ``,
+      `Live data: ${dataCtx}`,
+      `Risk tolerance: ${riskTolerance} (max position size: ${riskPcts[riskTolerance]})`,
+      portfolioSize ? `Portfolio size: $${portfolioSize.toLocaleString()}` : "",
+      timeframe ? `Timeframe: ${timeframe}` : "",
+      ``,
+      `Output exactly this format:`,
+      `## Trade Plan: ${token.toUpperCase()} ${side.toUpperCase()}`,
+      ``,
+      `**Direction:** ${side.toUpperCase()}`,
+      `**Timeframe:** [fill]`,
+      ``,
+      `### Entry`,
+      `- Ideal entry: $[price or range]`,
+      `- Entry condition: [what must happen / trigger]`,
+      ``,
+      `### Risk Management`,
+      `- Stop loss: $[price] ([%] below/above entry)`,
+      `- Position size: [% of portfolio]${portfolioSize ? ` = $[USD amount]` : ""}`,
+      `- Max loss: [% of portfolio]`,
+      ``,
+      `### Targets`,
+      `- TP1: $[price] ([%] gain) — partial exit [%]`,
+      `- TP2: $[price] ([%] gain) — partial exit [%]`,
+      `- TP3: $[price] ([%] gain) — final exit`,
+      ``,
+      `### Risk/Reward`,
+      `- RR ratio: [X:1]`,
+      `- Expected value: [+/- %]`,
+      ``,
+      `### Thesis in One Sentence`,
+      `[Why this trade makes sense right now]`,
+      ``,
+      `### Invalidation`,
+      `[Exactly what would make you exit early / kill the thesis]`,
+    ].filter(Boolean).join("\n");
+
+    try {
+      const systemPrompt = await buildSystemPrompt(`${token} trade ${riskTolerance} ${timeframe ?? ""}`);
+      const answer = await callLLM(systemPrompt, prompt, 1200);
+      return { content: [{ type: "text", text: answer }] };
+    } catch (err: any) {
+      return { content: [{ type: "text", text: `trade_plan error: ${err.message}` }], isError: true };
+    }
+  }
+
+  return null;
 }

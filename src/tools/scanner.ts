@@ -118,11 +118,128 @@ function scoreDipReversal(c: Candidate, minLiquidity = DEFAULT_MIN_LIQ): ScoreRe
   };
 }
 
-// ── Fetch helper ──────────────────────────────────────────────────────────────
+// ── Fetch helpers ─────────────────────────────────────────────────────────────
 async function fetchJson(url: string): Promise<any> {
   const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
   if (!res.ok) throw new Error(`HTTP ${res.status} from ${new URL(url).hostname}`);
   return res.json();
+}
+
+async function fetchBasePools(minLiquidity: number, limit: number): Promise<Candidate[]> {
+  const [trendingRes, newPoolsRes] = await Promise.allSettled([
+    fetchJson("https://api.geckoterminal.com/api/v2/networks/base/trending_pools?page=1"),
+    fetchJson("https://api.geckoterminal.com/api/v2/networks/base/new_pools?page=1"),
+  ]);
+
+  const rawPools: any[] = [
+    ...(trendingRes.status === "fulfilled" ? trendingRes.value.data ?? [] : []),
+    ...(newPoolsRes.status === "fulfilled"  ? newPoolsRes.value.data  ?? [] : []),
+  ];
+
+  if (!rawPools.length) throw new Error("GeckoTerminal returned no pools. Try again in a moment.");
+
+  const seen = new Set<string>();
+  const deduped = rawPools.filter(p => {
+    if (!p?.attributes || !p.id) return false;
+    if (seen.has(p.id)) return false;
+    seen.add(p.id);
+    return true;
+  });
+
+  return deduped
+    .map((p: any) => {
+      const a    = p.attributes ?? {};
+      const txns = a.transactions ?? {};
+      const pc   = a.price_change_percentage ?? {};
+      const vol  = a.volume_usd ?? {};
+      const liq  = parseFloat(a.reserve_in_usd ?? "0");
+      const tokenRel = p.relationships?.base_token?.data?.id ?? "";
+      const mint = tokenRel.includes("_") ? tokenRel.split("_")[1] : tokenRel;
+      if (!mint?.startsWith("0x")) return null;
+      return {
+        mint,
+        symbol:         (a.name ?? "").split(" / ")[0] || mint.slice(0, 8),
+        priceUsd:       parseFloat(a.base_token_price_usd ?? "0"),
+        priceChange5m:  parseFloat(pc.m5  ?? "0"),
+        priceChange1h:  parseFloat(pc.h1  ?? "0"),
+        priceChange6h:  parseFloat(pc.h6  ?? "0"),
+        priceChange24h: parseFloat(pc.h24 ?? "0"),
+        volume1h:       parseFloat(vol.h1  ?? "0"),
+        liquidity:      liq,
+        buys5m:         txns.m5?.buys  ?? 0,
+        sells5m:        txns.m5?.sells ?? 0,
+        buys1h:         txns.h1?.buys  ?? 0,
+        sells1h:        txns.h1?.sells ?? 0,
+      } satisfies Candidate;
+    })
+    .filter((c): c is Candidate => c !== null && c.liquidity >= minLiquidity)
+    .slice(0, limit);
+}
+
+// ── Momentum scorer (inverse of dip-reversal) ────────────────────────────────
+interface MomentumResult {
+  score:         number;
+  passed:        boolean;
+  pattern:       string | null;
+  gateFailures:  string[];
+  buyPressure5m: number;
+}
+
+function scoreMomentum(c: Candidate, minLiquidity = DEFAULT_MIN_LIQ): MomentumResult {
+  const pc5m  = c.priceChange5m;
+  const pc1h  = c.priceChange1h;
+  const pc6h  = c.priceChange6h;
+  const pc24h = c.priceChange24h;
+  const liq   = c.liquidity;
+  const vol1h = c.volume1h;
+
+  const totalTxns5m = c.buys5m + c.sells5m;
+  const buyRatio5m  = totalTxns5m > 0 ? c.buys5m / totalTxns5m : 0;
+  const totalTxns1h = c.buys1h + c.sells1h;
+  const buyRatio1h  = totalTxns1h > 0 ? c.buys1h / totalTxns1h : 0;
+  const bp          = buyRatio5m * 100;
+
+  // Hard gates — all must pass
+  const gateFailures: string[] = [];
+  if (pc1h < 3)                              gateFailures.push(`1h momentum weak (${pc1h.toFixed(1)}% < 3%)`);
+  if (pc5m < 0.5)                            gateFailures.push(`5m not accelerating (${pc5m.toFixed(1)}% < 0.5%)`);
+  if (totalTxns5m > 5 && buyRatio5m < 0.55) gateFailures.push(`buy pressure low (${bp.toFixed(0)}% < 55%)`);
+  if (liq < minLiquidity)                    gateFailures.push(`liquidity $${(liq / 1000).toFixed(0)}k < $${(minLiquidity / 1000).toFixed(0)}k min`);
+  if (pc24h > 150)                           gateFailures.push(`already parabolic (24h ${pc24h.toFixed(0)}%)`);
+
+  if (gateFailures.length > 0) {
+    return { score: 0, passed: false, pattern: null, gateFailures, buyPressure5m: bp };
+  }
+
+  // 1. Momentum strength (0–25 pts)
+  const momentumPts = pc1h >= 20 ? 25 : pc1h >= 10 ? 20 : pc1h >= 6 ? 15 : pc1h >= 3 ? 8 : 3;
+
+  // 2. 5m acceleration (0–20 pts)
+  const accelPts = pc5m >= 5 ? 20 : pc5m >= 3 ? 16 : pc5m >= 2 ? 12 : pc5m >= 1 ? 7 : 3;
+
+  // 3. Buy pressure (0–15 pts)
+  const bpPts = bp >= 70 ? 15 : bp >= 65 ? 12 : bp >= 60 ? 9 : bp >= 55 ? 5 : 2;
+
+  // 4. Volume & activity (0–15 pts)
+  const actPts = vol1h >= 100_000 && totalTxns1h >= 200 ? 15
+    : vol1h >= 50_000 && totalTxns1h >= 100 ? 12
+    : vol1h >= 20_000 && totalTxns1h >= 40  ? 8
+    : vol1h >= 5_000  && totalTxns1h >= 10  ? 4 : 1;
+
+  // 5. Trend continuation (0–15 pts)
+  let trendPts = 0;
+  if (pc6h > 5 && pc24h > 5)   trendPts = 15;
+  else if (pc6h > 0 && pc24h > 0) trendPts = 10;
+  else if (pc6h > 0)             trendPts = 5;
+
+  // 6. Sentiment acceleration (0–10 pts)
+  const sentAccel = buyRatio5m - buyRatio1h;
+  const sentPts = sentAccel >= 0.10 ? 10 : sentAccel >= 0.05 ? 7 : sentAccel >= 0 ? 3 : 0;
+
+  const score = Math.max(0, Math.min(100, momentumPts + accelPts + bpPts + actPts + trendPts + sentPts));
+  const pattern = pc1h >= 15 ? "BREAKOUT" : pc1h >= 8 ? "MOMENTUM" : pc1h >= 3 ? "PUSH" : "WEAK-PUSH";
+
+  return { score, passed: true, pattern, gateFailures: [], buyPressure5m: bp };
 }
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
@@ -130,6 +247,12 @@ const AddressSchema    = z.string().regex(/^0x[0-9a-fA-F]{40}$/, "must be a vali
 const ScoreTokenSchema = z.object({ address: AddressSchema, minLiquidity: z.number().positive().optional() });
 const CheckTokenSchema = z.object({ address: AddressSchema });
 const ScanDipsSchema   = z.object({
+  minScore:     z.number().min(0).max(100).optional(),
+  minLiquidity: z.number().positive().optional(),
+  limit:        z.number().int().min(1).max(100).optional(),
+}).default({});
+
+const ScanMomentumSchema = z.object({
   minScore:     z.number().min(0).max(100).optional(),
   minLiquidity: z.number().positive().optional(),
   limit:        z.number().int().min(1).max(100).optional(),
@@ -167,6 +290,23 @@ export const SCANNER_TOOLS: Tool[] = [
       type: "object",
       properties: {
         minScore:     { type: "number", description: "Min score to include in results (default 50)" },
+        minLiquidity: { type: "number", description: "Min pool liquidity in USD (default 50000)" },
+        limit:        { type: "number", description: "Max pools to scan (default 40, max 100)" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "scan_momentum",
+    description:
+      "Scan Base pools for momentum breakout setups — tokens with strong 1h+ upward momentum that are still accelerating. " +
+      "The inverse of scan_dips: finds BREAKOUT / MOMENTUM / PUSH patterns instead of dip-reversals. " +
+      "Gates: 1h > +3%, 5m still rising, buy pressure > 55%, not already parabolic (24h < 150%). " +
+      "Returns scored and ranked candidates. No API keys required.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        minScore:     { type: "number", description: "Min score to include (default 50)" },
         minLiquidity: { type: "number", description: "Min pool liquidity in USD (default 50000)" },
         limit:        { type: "number", description: "Max pools to scan (default 40, max 100)" },
       },
@@ -328,61 +468,12 @@ export async function handleScannerTool(name: string, args: unknown): Promise<To
 
     const { minScore = DEFAULT_MIN_SCORE, minLiquidity = DEFAULT_MIN_LIQ, limit = 40 } = parsed.data;
 
-    // Fetch trending + new pools on Base from GeckoTerminal in parallel
-    const [trendingRes, newPoolsRes] = await Promise.allSettled([
-      fetchJson("https://api.geckoterminal.com/api/v2/networks/base/trending_pools?page=1"),
-      fetchJson("https://api.geckoterminal.com/api/v2/networks/base/new_pools?page=1"),
-    ]);
-
-    const rawPools: any[] = [
-      ...(trendingRes.status === "fulfilled" ? trendingRes.value.data ?? [] : []),
-      ...(newPoolsRes.status === "fulfilled"  ? newPoolsRes.value.data  ?? [] : []),
-    ];
-
-    if (!rawPools.length) {
-      return { content: [{ type: "text", text: "GeckoTerminal returned no pools. Try again in a moment." }], isError: true };
+    let candidates: Candidate[];
+    try {
+      candidates = await fetchBasePools(minLiquidity, limit);
+    } catch (err: any) {
+      return { content: [{ type: "text", text: err.message }], isError: true };
     }
-
-    // Deduplicate by pool id
-    const seen = new Set<string>();
-    const pools = rawPools.filter(p => {
-      if (!p?.attributes || !p.id) return false;
-      if (seen.has(p.id)) return false;
-      seen.add(p.id);
-      return true;
-    });
-
-    // Map GeckoTerminal pool → Candidate
-    const candidates: Candidate[] = pools
-      .map((p: any) => {
-        const a    = p.attributes ?? {};
-        const txns = a.transactions ?? {};
-        const pc   = a.price_change_percentage ?? {};
-        const vol  = a.volume_usd ?? {};
-        const liq  = parseFloat(a.reserve_in_usd ?? "0");
-
-        const tokenRel = p.relationships?.base_token?.data?.id ?? "";
-        const mint = tokenRel.includes("_") ? tokenRel.split("_")[1] : tokenRel;
-        if (!mint?.startsWith("0x")) return null;
-
-        return {
-          mint,
-          symbol:         (a.name ?? "").split(" / ")[0] || mint.slice(0, 8),
-          priceUsd:       parseFloat(a.base_token_price_usd ?? "0"),
-          priceChange5m:  parseFloat(pc.m5  ?? "0"),
-          priceChange1h:  parseFloat(pc.h1  ?? "0"),
-          priceChange6h:  parseFloat(pc.h6  ?? "0"),
-          priceChange24h: parseFloat(pc.h24 ?? "0"),
-          volume1h:       parseFloat(vol.h1  ?? "0"),
-          liquidity:      liq,
-          buys5m:         txns.m5?.buys  ?? 0,
-          sells5m:        txns.m5?.sells ?? 0,
-          buys1h:         txns.h1?.buys  ?? 0,
-          sells1h:        txns.h1?.sells ?? 0,
-        } satisfies Candidate;
-      })
-      .filter((c): c is Candidate => c !== null && c.liquidity >= minLiquidity)
-      .slice(0, limit);
 
     // Score each candidate — keep only those that passed gates + meet minScore
     type ScoredCandidate = Candidate & ScoreResult;
@@ -429,6 +520,66 @@ export async function handleScannerTool(name: string, args: unknown): Promise<To
 
     lines.push(`---`);
     lines.push(`Next steps: \`score_token\` for full breakdown · \`check_token\` for rug check before buying`);
+
+    return { content: [{ type: "text", text: lines.join("\n") }] };
+  }
+
+  // ── scan_momentum ──────────────────────────────────────────────────────────
+  if (name === "scan_momentum") {
+    const parsed = ScanMomentumSchema.safeParse(args ?? {});
+    if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
+
+    const { minScore = DEFAULT_MIN_SCORE, minLiquidity = DEFAULT_MIN_LIQ, limit = 40 } = parsed.data;
+
+    let candidates: Candidate[];
+    try {
+      candidates = await fetchBasePools(minLiquidity, limit);
+    } catch (err: any) {
+      return { content: [{ type: "text", text: err.message }], isError: true };
+    }
+
+    type ScoredMomentum = Candidate & MomentumResult;
+    const scored: ScoredMomentum[] = candidates
+      .map(c => ({ ...c, ...scoreMomentum(c, minLiquidity) }))
+      .filter(c => c.passed && c.score >= minScore)
+      .sort((a, b) => b.score - a.score);
+
+    if (!scored.length) {
+      return {
+        content: [{
+          type: "text",
+          text: [
+            `## Momentum Scan — No Breakouts Found`,
+            ``,
+            `Scanned **${candidates.length} pools** on Base. None passed the momentum gates with score ≥ ${minScore}.`,
+            ``,
+            `When nothing breaks out, the market may be in consolidation or distribution.`,
+            ``,
+            `Try: \`scan_dips\` to look for reversal opportunities instead.`,
+          ].join("\n"),
+        }],
+      };
+    }
+
+    const sign = (n: number) => n >= 0 ? `+${n.toFixed(1)}` : n.toFixed(1);
+    const lines = [
+      `## Momentum Scan — ${scored.length} Breakout${scored.length !== 1 ? "s" : ""} Found`,
+      `Scanned **${candidates.length} pools** · Score ≥ ${minScore} · Liq ≥ $${(minLiquidity / 1000).toFixed(0)}k`,
+      ``,
+    ];
+
+    for (const c of scored.slice(0, 10)) {
+      const bar = "█".repeat(Math.round(c.score / 10)).padEnd(10, "░");
+      lines.push(`### ${c.symbol} · ${c.score}/100 \`${bar}\``);
+      lines.push(`**Pattern:** ${c.pattern} · **Liq:** $${(c.liquidity / 1_000).toFixed(0)}k · **1h:** ${sign(c.priceChange1h)}% · **5m:** ${sign(c.priceChange5m)}%`);
+      lines.push(`**Buy pressure:** ${c.buyPressure5m.toFixed(0)}% · **Vol 1h:** $${(c.volume1h / 1_000).toFixed(0)}k`);
+      lines.push(`**Trend:** 6h ${sign(c.priceChange6h)}% / 24h ${sign(c.priceChange24h)}%`);
+      lines.push(`\`${c.mint}\``);
+      lines.push(``);
+    }
+
+    lines.push(`---`);
+    lines.push(`Next steps: \`score_token\` for dip-reversal score · \`check_token\` for rug check before buying`);
 
     return { content: [{ type: "text", text: lines.join("\n") }] };
   }

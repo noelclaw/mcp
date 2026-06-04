@@ -2,257 +2,313 @@
 
 [![npm version](https://img.shields.io/npm/v/@noelclaw/mcp.svg)](https://www.npmjs.com/package/@noelclaw/mcp)
 
-Noelclaw as an MCP skill — persistent memory, multi-agent coordination, scenario simulation, DeFi execution, and Sentinel-gated playbooks. Works with Claude, Cursor, Hermes, Windsurf, and any MCP-compatible client.
+90 MCP tools for your AI — persistent memory, multi-agent swarm, DeFi execution, market intelligence, automations, and on-chain actions on Base.
 
-**37 tools** across market data, research, vault, swarm, MiroShark simulation, DeFi, automation, and framework.
+No API key required to start. Ask your AI in plain English.
 
 ```bash
-npx @noelclaw/mcp
+npx -y @noelclaw/mcp
 ```
 
 ---
 
-## Quick Install
+## Install
 
-### Claude Code
+### Claude Code (CLI)
 ```bash
-claude mcp add noelclaw -e NOELCLAW_API_KEY=noel_... -- npx @noelclaw/mcp
+claude mcp add noelclaw -- npx -y @noelclaw/mcp
 ```
 
 ### Claude Desktop
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (Mac) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+Add to `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/Library/Application Support/Claude/claude_desktop_config.json` (Mac):
 
 ```json
 {
   "mcpServers": {
     "noelclaw": {
       "command": "npx",
-      "args": ["@noelclaw/mcp"],
-      "env": {
-        "NOELCLAW_API_KEY": "noel_..."
-      }
+      "args": ["-y", "@noelclaw/mcp"]
     }
   }
 }
 ```
 
-### Cursor / Windsurf
+### Cursor / Windsurf / Aeon / Hermes / Any MCP Client
+
 ```json
 {
   "mcpServers": {
     "noelclaw": {
       "command": "npx",
-      "args": ["@noelclaw/mcp"],
-      "env": {
-        "NOELCLAW_API_KEY": "noel_..."
-      }
+      "args": ["-y", "@noelclaw/mcp"]
     }
   }
 }
 ```
 
-### Hermes
-```yaml
-mcp_servers:
-  noelclaw:
-    command: npx
-    args:
-      - "@noelclaw/mcp"
-    env:
-      NOELCLAW_API_KEY: "noel_..."
-```
+Restart your client. Tools load automatically.
 
 ---
 
-## Authentication
+## What It Does
 
-Get a key instantly — no signup:
+Ask your AI anything — it routes to the right tool automatically.
 
-```bash
-curl -X POST https://api.noelclaw.com/auth/key
-# → { "apiKey": "noel_..." }
 ```
+what's the ETH gas price and latest block on Base?
+→ Gas: 0.006 gwei · Block: 46,773,463 · ETH: $1,991
 
-Set `NOELCLAW_API_KEY` in your MCP config. That's it.
+show me the best yield vaults on Base right now
+→ Clearstar USDC Reactor: 7.57% APY ($2.6M TVL)
+→ Moonwell Flagship USDC: 4.63% APY ($9.1M TVL)
+
+remember my Aerodrome thesis for next time
+→ ✓ saved to Vault · auto-loaded every session
+
+set up weekly $100 ETH DCA every Monday
+→ ✓ automation created · runs weekly 09:00 UTC
+
+swap 0.5 ETH to USDC on Base
+→ ✓ swapped → 1,842 USDC · tx confirmed in 2s
+
+swarm research topic: "ETH vs SOL which wins 2025"
+→ Triggers multi-agent research, saves findings to your vault
+
+generate a Solidity ERC-20 with burn and pause features
+→ Returns production-ready OpenZeppelin contract
+```
 
 ---
 
 ## Tools
 
-### Market Data
+### Base Chain (4 tools)
 
 | Tool | Description |
 |------|-------------|
-| `get_market_data` | Live prices for BTC, ETH, SOL — sourced from CoinGecko via swarm. Pass a token symbol to focus |
-| `get_token_data` | Price, 24h change, market cap, and volume for any specific token |
+| `base_chain_stats` | Live ETH price, gas price, latest block on Base mainnet |
+| `base_query_vaults` | Top Morpho yield vaults ranked by APY with TVL filter |
+| `base_list_markets` | Moonwell lending and borrowing rates with utilization |
+| `base_prepare_deposit` | Prepare a deposit transaction into a Morpho vault |
 
-### Research & AI
-
-| Tool | Description |
-|------|-------------|
-| `research` | Deep research via Bankr (real-time). Returns overview, key findings, market impact, sentiment |
-| `get_insight` | Noel's daily crypto + macro insight — price action, narratives, on-chain signals, one takeaway |
-| `ask_noel` | Ask Noel AI for DeFi analysis, trade ideas, and market research with live context |
-| `humanize_text` | Remove AI tells from text — fixes 29 AI patterns, makes output sound natural. Powered by MiniMax-M2.7. Requires `MINIMAX_API_KEY` |
-
-### Noel-Vault
-
-> Persistent memory across sessions. Save findings, recall by key, search full-text. Every save auto-versions.
+### Market & Prices (5 tools)
 
 | Tool | Description |
 |------|-------------|
-| `vault_save` | Save any content — research, execution logs, workflows, prompts, files, memory |
-| `vault_read` | Read an entry by key |
-| `vault_list` | List all entries with type, title, version, last updated |
-| `vault_search` | Full-text search across all content |
-| `vault_history` | Version history with commit messages |
-| `vault_diff` | Line-by-line diff between two versions |
-| `vault_export` | Export full vault or filter by type |
+| `get_market_data` | Live prices for BTC, ETH, SOL, and other tokens |
+| `get_token_data` | Token info — price, volume, market cap |
+| `compare_tokens` | Side-by-side comparison of two tokens |
+| `market_overview` | Broad market snapshot — top movers, sentiment, dominance |
+| `token_history` | Historical price data for any token |
 
-### Noel-Swarm
+### DeFi Execution (7 tools)
 
-> Shared memory bus for multi-agent coordination. All agents read/write the same store with freshness tracking and execution scoring.
+> Transactions are signed client-side — no private key ever leaves your machine.
 
 | Tool | Description |
 |------|-------------|
-| `start_swarm` | Start a swarm session |
-| `stop_swarm` | Stop the active session |
-| `get_swarm_status` | Session state, memory snapshot, execution scores |
-| `write_swarm_memory` | Write a key-value entry with optional TTL. Use `market/*` / `dex/*` keys for live CoinGecko / DexScreener data |
-| `get_swarm_memory` | Read by key — returns value + freshness metadata |
-| `get_execution_scores` | Per-agent, per-skill performance scores |
+| `get_portfolio` | View wallet holdings and token balances |
+| `estimate_swap` | Get a swap quote via 0x before executing |
+| `swap_tokens` | Execute a token swap on Base via 0x |
+| `send_token` | Send ETH or ERC-20 tokens to any address |
+| `scan_wallet` | Analyze a wallet — holdings, activity, risk signals |
+| `analyze_wallet` | Deep wallet analysis with on-chain patterns |
+| `get_defi_yields` | Find the best DeFi yield opportunities on Base |
 
-### MiroShark
+### Vault — Persistent Memory (15 tools)
 
-> Multi-agent scenario simulation — describe any scenario in plain English, get back a full simulation with AI agents acting as market participants, analysts, and social actors.
-
-| Tool | Description |
-|------|-------------|
-| `miroshark_simulate` | Run a simulation from a plain-English scenario. Handles full setup automatically (knowledge graph, 42+ agents). Returns a simulation ID |
-| `miroshark_status` | Poll progress — surfaces agent actions, round count, consensus when complete |
-
-No extra env vars needed. MiroShark is hosted on Noelclaw's infrastructure.
-
-### Wallet & DeFi `beta`
-
-> On-chain operations on Base mainnet. Transactions are signed client-side — no private key ever leaves your machine.
+> Save research, notes, and data across sessions. Every save auto-versions.
 
 | Tool | Description |
 |------|-------------|
-| `get_wallet_address` | Show your local MCP wallet address |
-| `swap_tokens` | Swap tokens on Base mainnet via 0x Permit2 (ETH, USDC, USDT, DAI, WETH) |
-| `send_token` | Send ETH or any ERC-20 to any address |
-| `claim_fees` | Claim accumulated ETH from Flaunch token swap fees |
+| `vault_save` | Save a key-value entry to your personal vault |
+| `vault_read` | Read a vault entry by key |
+| `vault_list` | List recent vault entries |
+| `vault_search` | Full-text search across your vault |
+| `vault_history` | Version history for a vault entry |
+| `vault_diff` | Diff two versions of a vault entry |
+| `vault_export` | Export vault entries as JSON or markdown |
+| `vault_store_credential` | Securely store an API key or secret |
+| `vault_get_credential` | Retrieve a stored credential |
+| `vault_publish` | Publish a vault entry as a public note |
+| `vault_explore` | Browse vault by tag or category |
+| `vault_pin` | Pin an important entry to the top |
+| `vault_delete` | Delete a vault entry |
+| `vault_link` | Link two vault entries together |
+| `vault_tag` | Add or update tags on a vault entry |
 
-### Automations `beta`
+### Memory (7 tools)
+
+> Semantic memory backed by Supermemory — find anything by meaning, not keywords.
 
 | Tool | Description |
 |------|-------------|
-| `create_automation` | Create an automation in plain English — DCA, price alerts, conditional buys/sells |
-| `list_automations` | List all automations with status and next scheduled run |
+| `memory_add` | Add content to semantic memory — text, notes, or fetch a URL automatically |
+| `memory_search` | Search memory by meaning — "what did I save about ETH yield?" |
+| `memory_context` | Load memory entries relevant to the current conversation |
+| `memory_profile` | Your full memory profile — preferences, history, patterns |
+| `memory_list` | List recent memory entries |
+| `memory_delete` | Remove a memory entry |
+| `memory_insight` | AI-generated insights from your memory patterns |
+
+### Swarm — Multi-Agent System (13 tools)
+
+> Agents research, monitor, and analyze in parallel with shared memory.
+
+| Tool | Description |
+|------|-------------|
+| `start_swarm` | Start the multi-agent swarm for autonomous monitoring |
+| `stop_swarm` | Stop the active swarm session |
+| `get_swarm_status` | Status, shared memory snapshot, and execution scores |
+| `trigger_agent` | Run one agent now (market-monitor, sentiment-tracker, risk-verifier, etc.) |
+| `write_swarm_memory` | Write to the swarm's shared memory |
+| `get_swarm_memory` | Read from swarm shared memory |
+| `get_execution_scores` | Self-improvement scores across all skills |
+| `swarm_research` | Multi-agent research on any topic — auto-saves to vault |
+| `swarm_brief` | Summary of everything the swarm has researched |
+| `swarm_broadcast` | Broadcast a message to all active swarm agents |
+| `swarm_pulse` | Heartbeat check — active agents and last activity |
+| `swarm_reflect` | Swarm self-reflection — what went well, what to improve |
+| `swarm_watch` | Set the swarm to watch a token or topic for changes |
+
+### Automation (6 tools)
+
+| Tool | Description |
+|------|-------------|
+| `create_automation` | Create a trigger-based automation — price alert, DCA, scheduled task |
+| `list_automations` | View all active automations |
 | `pause_automation` | Pause or resume an automation |
-| `delete_automation` | Permanently delete an automation |
+| `delete_automation` | Delete an automation |
+| `get_automation_runs` | Execution history for automations |
+| `run_automation` | Manually trigger an automation now |
 
-### Noel Framework `beta`
+### Framework & Sentinel (6 tools)
 
-> Sentinel-gated agent execution. Every action checked against 5 mechanical rules before it runs.
+> Sentinel-gated agent execution — every action checked against rules before it runs.
 
 | Tool | Description |
 |------|-------------|
-| `create_task_packet` | Convert plain-English intent into a structured task scope with permissions and constraints |
+| `create_task_packet` | Convert intent into a structured task with permissions and constraints |
 | `list_task_packets` | List all task packets |
-| `list_playbooks` | List available playbooks |
-| `run_playbook` | Execute a Sentinel-gated playbook — halts if any step is blocked |
-| `get_noel_ledger` | Full audit trail of every Sentinel decision |
-| `get_sentinel_rules` | Exact rules per agent role |
+| `list_playbooks` | List available execution playbooks |
+| `run_playbook` | Execute a playbook by ID |
+| `get_noel_ledger` | Credits ledger and full audit trail |
+| `get_sentinel_rules` | View and manage Sentinel gate rules |
 
-### Social
+### Scanner (4 tools)
 
 | Tool | Description |
 |------|-------------|
-| `post_tweet` | Post a tweet. Requires `TWITTER_BEARER_TOKEN` or delegated via Noelclaw |
-| `set_telegram` | Connect Telegram for push notifications from market and swarm events |
+| `score_token` | Risk and quality score for any token |
+| `check_token` | Contract audit flags and honeypot detection |
+| `scan_dips` | Find tokens currently dipping with recovery signals |
+| `scan_momentum` | Find tokens with strong upward momentum |
+
+### Research & Insight (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `ask_noel` | Crypto AI analyst — opinions, trade ideas, market outlook |
+| `market_thesis` | AI-generated investment thesis for any token or sector |
+| `trade_plan` | Structured trade plan with entry, exit, and risk levels |
+
+### MiroShark (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `miroshark_simulate` | Run a multi-agent market simulation from plain English |
+| `miroshark_status` | Poll simulation progress and get the AI brief on completion |
+| `miroshark_stop` | Stop a running simulation |
+
+### Coder (7 tools)
+
+| Tool | Description |
+|------|-------------|
+| `scaffold_project` | Scaffold a DeFi or Web3 project |
+| `generate_component` | Generate a React component with wagmi/viem |
+| `generate_contract` | Generate a Solidity smart contract |
+| `audit_contract` | Audit a Solidity contract for vulnerabilities |
+| `explain_code` | Explain any code in plain English |
+| `generate_mcp_skill` | Generate a new MCP tool from a plain English description |
+| `review_code` | Code review with actionable feedback |
+
+### Agents Marketplace (2 tools)
+
+| Tool | Description |
+|------|-------------|
+| `list_agents` | Browse available AI agents |
+| `hire_agent` | Hire an agent for a specific task |
+
+### Content & Humanizer (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `humanize_text` | Remove AI writing patterns — fixes 29 common AI tells |
+| `write_thread` | Write a Twitter/X thread on any topic |
+| `write_post` | Write a single social post — crypto, product, or general |
+
+### OS (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `noel_status` | Full system dashboard — memory usage, swarm health, active automations |
+| `noel_boot` | Boot sequence — starts swarm, loads market prices, returns a unified briefing |
+| `noel_shutdown` | Clean shutdown — stops swarm, saves session summary to vault |
+
+### Wallet & Notifications (2 tools)
+
+| Tool | Description |
+|------|-------------|
+| `get_wallet_address` | Get or generate your MCP wallet address |
+| `set_telegram` | Connect Telegram for notifications |
 
 ---
 
-## Environment Variables
+## Configuration
 
-### Required
+No config required to start — all tools work out of the box via the Noelclaw backend.
 
-| Var | Description |
-|-----|-------------|
-| `NOELCLAW_API_KEY` | Your API key (`noel_...`) — get one at `POST https://api.noelclaw.com/auth/key` |
+For additional capabilities, add to the `env` block in your MCP config:
 
-### Optional
-
-| Var | Used for |
-|-----|---------|
-| `MINIMAX_API_KEY` | `humanize_text` tool — powered by MiniMax-M2.7 |
-| `BANKR_API_KEY` | `research` tool — Bankr Agent deep research |
-| `TELEGRAM_BOT_TOKEN` | Your own Telegram bot for notifications |
-| `TELEGRAM_CHAT_ID` | Your Telegram chat ID |
-| `ALCHEMY_API_KEY` | Faster Base RPC for swaps |
-| `GROK_API_KEY` | Grok integration via BYOK |
-
----
-
-## Usage Examples
-
+```json
+{
+  "mcpServers": {
+    "noelclaw": {
+      "command": "npx",
+      "args": ["-y", "@noelclaw/mcp"],
+      "env": {
+        "NOELCLAW_API_KEY": "noel_sk_...",
+        "ANTHROPIC_API_KEY": "sk-ant-..."
+      }
+    }
+  }
+}
 ```
-# Live market data
-get_market_data()                                          # BTC, ETH, SOL prices
-get_token_data(question: "What is the price of HYPE?")
 
-# Research
-research(query: "What is happening with the Base ecosystem this week?")
-get_insight()
-ask_noel(question: "What are the risks of holding ETH through a Fed meeting?")
-
-# Humanize AI-generated text
-humanize_text(text: "In today's rapidly evolving landscape, it is worth noting...")
-
-# Save findings to vault
-vault_save(type: "research", key: "research/base-may-2026", title: "Base Ecosystem", content: "...")
-vault_search(query: "Base ecosystem")
-vault_history(key: "research/base-may-2026")
-
-# Coordinate agents via swarm
-start_swarm()
-write_swarm_memory(agentId: "analyst", key: "research/btc", value: "bullish", ttlSeconds: 3600)
-get_swarm_memory(key: "market/BTC")    # real-time CoinGecko price
-get_swarm_memory(key: "dex/PEPE")     # real-time DexScreener data
-
-# Run a MiroShark simulation
-miroshark_simulate(scenario: "What happens if the US passes a Bitcoin strategic reserve bill?")
-miroshark_status(simulation_id: "sim_abc123")
-
-# DeFi (beta)
-swap_tokens(fromToken: "ETH", toToken: "USDC", amount: "0.01")
-send_token(token: "USDC", toAddress: "0x...", amount: "10")
-claim_fees()
-
-# Sentinel-gated execution (beta)
-create_task_packet(task: "Monitor portfolio, max $0 spend, read only")
-run_playbook(playbook_name: "Daily Market Scan")
-get_noel_ledger()
-```
+| Variable | Purpose |
+|----------|---------|
+| `NOELCLAW_API_KEY` | Unlocks swarm, automation, framework, and agent tools. Get one at [app.noelclaw.com](https://app.noelclaw.com) |
+| `ANTHROPIC_API_KEY` | AI tools use your Claude quota — you pay, not the server |
+| `NOELCLAW_SESSION_TOKEN` | Session token from app.noelclaw.com (alternative to API key) |
+| `NOELCLAW_CONVEX_URL` | Override the backend URL (for self-hosted deployments) |
 
 ---
 
 ## Troubleshooting
 
-| Error | Fix |
-|-------|-----|
+| Problem | Fix |
+|---------|-----|
 | Tools not appearing | Restart your MCP client after adding the config |
-| `401 Unauthorized` | Check `NOELCLAW_API_KEY` is set — get one at `POST https://api.noelclaw.com/auth/key` |
-| `humanize_text` fails | Set `MINIMAX_API_KEY` in your MCP env config |
-| `research` fails | Set `BANKR_API_KEY` — Bankr access required for deep research |
-| Server starts but no response | Expected — server waits for MCP stdin, not HTTP |
+| Swarm returns auth error | Add `NOELCLAW_API_KEY` — get one at app.noelclaw.com |
+| Server starts but no output | Expected — server waits for MCP stdin, not HTTP |
+| Old version loading | Run `npx clear-npx-cache` then restart your client |
 
 ---
 
 ## Links
 
-- npm: [npmjs.com/package/@noelclaw/mcp](https://npmjs.com/package/@noelclaw/mcp)
+- npm: [npmjs.com/package/@noelclaw/mcp](https://www.npmjs.com/package/@noelclaw/mcp)
 - GitHub: [github.com/noelclaw/mcp](https://github.com/noelclaw/mcp)
-- Platform: [noelclaw.com](https://noelclaw.com)
+- App: [app.noelclaw.com](https://app.noelclaw.com)
+- Docs: [docs.noelclaw.fun](https://docs.noelclaw.fun)

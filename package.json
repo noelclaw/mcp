@@ -1,7 +1,7 @@
 {
   "name": "@noelclaw/mcp",
-  "version": "1.6.0",
-  "description": "Noelclaw as an MCP skill — persistent memory, multi-agent coordination, scenario simulation, DeFi execution, and Sentinel-gated playbooks.",
+  "version": "2.4.0",
+  "description": "Noelclaw AI Operating System — persistent memory, multi-agent swarm, DeFi execution, market intelligence, and Sentinel-gated playbooks.",
   "main": "dist/index.js",
   "bin": {
     "noelclaw-mcp": "dist/index.js"
@@ -52,5 +52,8 @@
   },
   "engines": {
     "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
