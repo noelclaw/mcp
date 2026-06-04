@@ -57,8 +57,8 @@ export const ALL_TOOLS = [
 ];
 
 // Build O(1) dispatch map at startup — avoids sequential chained awaits per call
-type Handler = (name: string, args: unknown) => Promise<import("./types.js").ToolResult | null>;
-const HANDLER_MAP = new Map<string, Handler>([
+export type Handler = (name: string, args: unknown) => Promise<import("./types.js").ToolResult | null>;
+export const HANDLER_MAP = new Map<string, Handler>([
   ...MARKET_TOOLS.map(t      => [t.name, handleMarketTool]      as [string, Handler]),
   ...DEFI_TOOLS.map(t        => [t.name, handleDefiTool]        as [string, Handler]),
   ...AUTOMATION_TOOLS.map(t  => [t.name, handleAutomationTool]  as [string, Handler]),
@@ -78,7 +78,7 @@ const HANDLER_MAP = new Map<string, Handler>([
 ]);
 
 export const server = new Server(
-  { name: "noelclaw", version: "2.4.0" },
+  { name: "noelclaw", version: "3.0.0" },
   { capabilities: { tools: {} } }
 );
 
