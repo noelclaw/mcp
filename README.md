@@ -118,185 +118,192 @@ generate a Solidity ERC-20 with burn and pause features
 
 ## Tools
 
-### Base Chain (4 tools)
+Three pillars: **Remember** · **Act** · **Know**
+
+---
+
+### 🧠 REMEMBER — Persistent Memory
+
+Your AI loads your context before you type a single word.
+
+#### Vault — Structured Notes (15 tools)
+
+> Save research, decisions, and notes. Every entry is versioned and auto-tagged.
 
 | Tool | Description |
 |------|-------------|
-| `base_chain_stats` | Live ETH price, gas price, latest block on Base mainnet |
-| `base_query_vaults` | Top Morpho yield vaults ranked by APY with TVL filter |
-| `base_list_markets` | Moonwell lending and borrowing rates with utilization |
-| `base_prepare_deposit` | Prepare a deposit transaction into a Morpho vault |
+| `vault_save` | Save a note or research entry |
+| `vault_read` | Read an entry by key |
+| `vault_list` | List recent entries |
+| `vault_search` | Full-text search across your vault |
+| `vault_history` | Version history for an entry |
+| `vault_diff` | Diff two versions |
+| `vault_export` | Export vault as JSON or markdown |
+| `vault_store_credential` | Securely store an API key or secret |
+| `vault_get_credential` | Retrieve a stored credential |
+| `vault_publish` | Publish an entry as a public note |
+| `vault_explore` | Browse by tag or category |
+| `vault_pin` | Pin an important entry |
+| `vault_delete` | Delete an entry |
+| `vault_link` | Link two entries together |
+| `vault_tag` | Add or update tags |
 
-### Market & Prices (5 tools)
+#### Memory — Semantic Search (7 tools)
+
+> Find anything by meaning, not keywords. "What did I say about ETH yield?" just works.
+
+| Tool | Description |
+|------|-------------|
+| `memory_add` | Add text, notes, or auto-fetch a URL into semantic memory |
+| `memory_search` | Search by meaning — natural language queries |
+| `memory_context` | Load entries relevant to the current session |
+| `memory_profile` | Your full memory profile — preferences, history, patterns |
+| `memory_list` | List recent memory entries |
+| `memory_delete` | Remove a memory entry |
+| `memory_insight` | AI-generated insights from your memory patterns |
+
+#### OS — Session Lifecycle (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `noel_boot` | Start a session — loads market data, memory, and automations in one command |
+| `noel_status` | Full system dashboard — memory, swarm health, active automations |
+| `noel_shutdown` | End a session — saves summary to vault, stops swarm cleanly |
+
+---
+
+### ⚡ ACT — Execute & Automate
+
+Tell it what to do. It runs — on schedule, on-chain, or right now.
+
+#### Automations (6 tools)
+
+| Tool | Description |
+|------|-------------|
+| `create_automation` | Create a price alert, DCA schedule, or recurring task in plain English |
+| `list_automations` | View all active automations |
+| `pause_automation` | Pause or resume an automation |
+| `delete_automation` | Delete an automation |
+| `get_automation_runs` | Execution history |
+| `run_automation` | Trigger an automation manually |
+
+#### DeFi Execution (7 tools)
+
+> Transactions are signed client-side — your private key never leaves your machine.
+
+| Tool | Description |
+|------|-------------|
+| `get_portfolio` | View wallet holdings and token balances |
+| `estimate_swap` | Get a swap quote via 0x before executing |
+| `swap_tokens` | Execute a token swap on Base |
+| `send_token` | Send ETH or ERC-20 to any address |
+| `scan_wallet` | Analyze a wallet — holdings, activity, risk signals |
+| `analyze_wallet` | Deep wallet analysis with on-chain patterns |
+| `get_defi_yields` | Find the best yield opportunities on Base |
+
+#### Base Chain (4 tools)
+
+| Tool | Description |
+|------|-------------|
+| `base_chain_stats` | Live ETH price, gas price, latest block |
+| `base_query_vaults` | Top Morpho yield vaults ranked by APY |
+| `base_list_markets` | Moonwell lending and borrowing rates |
+| `base_prepare_deposit` | Prepare a deposit into a Morpho vault |
+
+#### Wallet & Notifications (2 tools)
+
+| Tool | Description |
+|------|-------------|
+| `get_wallet_address` | Get or generate your MCP wallet address |
+| `set_telegram` | Connect Telegram for automation notifications |
+
+#### Playbooks (6 tools)
+
+> Reusable sequences with safety rules applied before any action runs.
+
+| Tool | Description |
+|------|-------------|
+| `create_task_packet` | Convert intent into a structured task with constraints |
+| `list_task_packets` | List all task packets |
+| `list_playbooks` | Browse available playbooks |
+| `run_playbook` | Execute a playbook by ID |
+| `get_noel_ledger` | Credits and full audit trail |
+| `get_sentinel_rules` | View safety rules applied before actions |
+
+---
+
+### 🔍 KNOW — Research & Intelligence
+
+Always informed before you act.
+
+#### Market & Prices (5 tools)
 
 | Tool | Description |
 |------|-------------|
 | `get_market_data` | Live prices for BTC, ETH, SOL, and other tokens |
 | `get_token_data` | Token info — price, volume, market cap |
 | `compare_tokens` | Side-by-side comparison of two tokens |
-| `market_overview` | Broad market snapshot — top movers, sentiment, dominance |
+| `market_overview` | Top movers, sentiment, dominance snapshot |
 | `token_history` | Historical price data for any token |
 
-### DeFi Execution (7 tools)
-
-> Transactions are signed client-side — no private key ever leaves your machine.
-
-| Tool | Description |
-|------|-------------|
-| `get_portfolio` | View wallet holdings and token balances |
-| `estimate_swap` | Get a swap quote via 0x before executing |
-| `swap_tokens` | Execute a token swap on Base via 0x |
-| `send_token` | Send ETH or ERC-20 tokens to any address |
-| `scan_wallet` | Analyze a wallet — holdings, activity, risk signals |
-| `analyze_wallet` | Deep wallet analysis with on-chain patterns |
-| `get_defi_yields` | Find the best DeFi yield opportunities on Base |
-
-### Vault — Persistent Memory (15 tools)
-
-> Save research, notes, and data across sessions. Every save auto-versions.
-
-| Tool | Description |
-|------|-------------|
-| `vault_save` | Save a key-value entry to your personal vault |
-| `vault_read` | Read a vault entry by key |
-| `vault_list` | List recent vault entries |
-| `vault_search` | Full-text search across your vault |
-| `vault_history` | Version history for a vault entry |
-| `vault_diff` | Diff two versions of a vault entry |
-| `vault_export` | Export vault entries as JSON or markdown |
-| `vault_store_credential` | Securely store an API key or secret |
-| `vault_get_credential` | Retrieve a stored credential |
-| `vault_publish` | Publish a vault entry as a public note |
-| `vault_explore` | Browse vault by tag or category |
-| `vault_pin` | Pin an important entry to the top |
-| `vault_delete` | Delete a vault entry |
-| `vault_link` | Link two vault entries together |
-| `vault_tag` | Add or update tags on a vault entry |
-
-### Memory (7 tools)
-
-> Semantic memory backed by Supermemory — find anything by meaning, not keywords.
-
-| Tool | Description |
-|------|-------------|
-| `memory_add` | Add content to semantic memory — text, notes, or fetch a URL automatically |
-| `memory_search` | Search memory by meaning — "what did I save about ETH yield?" |
-| `memory_context` | Load memory entries relevant to the current conversation |
-| `memory_profile` | Your full memory profile — preferences, history, patterns |
-| `memory_list` | List recent memory entries |
-| `memory_delete` | Remove a memory entry |
-| `memory_insight` | AI-generated insights from your memory patterns |
-
-### Swarm — Multi-Agent System (13 tools)
-
-> Agents research, monitor, and analyze in parallel with shared memory.
-
-| Tool | Description |
-|------|-------------|
-| `start_swarm` | Start the multi-agent swarm for autonomous monitoring |
-| `stop_swarm` | Stop the active swarm session |
-| `get_swarm_status` | Status, shared memory snapshot, and execution scores |
-| `trigger_agent` | Run one agent now (market-monitor, sentiment-tracker, risk-verifier, etc.) |
-| `write_swarm_memory` | Write to the swarm's shared memory |
-| `get_swarm_memory` | Read from swarm shared memory |
-| `get_execution_scores` | Self-improvement scores across all skills |
-| `swarm_research` | Multi-agent research on any topic — auto-saves to vault |
-| `swarm_brief` | Summary of everything the swarm has researched |
-| `swarm_broadcast` | Broadcast a message to all active swarm agents |
-| `swarm_pulse` | Heartbeat check — active agents and last activity |
-| `swarm_reflect` | Swarm self-reflection — what went well, what to improve |
-| `swarm_watch` | Set the swarm to watch a token or topic for changes |
-
-### Automation (6 tools)
-
-| Tool | Description |
-|------|-------------|
-| `create_automation` | Create a trigger-based automation — price alert, DCA, scheduled task |
-| `list_automations` | View all active automations |
-| `pause_automation` | Pause or resume an automation |
-| `delete_automation` | Delete an automation |
-| `get_automation_runs` | Execution history for automations |
-| `run_automation` | Manually trigger an automation now |
-
-### Framework & Sentinel (6 tools)
-
-> Sentinel-gated agent execution — every action checked against rules before it runs.
-
-| Tool | Description |
-|------|-------------|
-| `create_task_packet` | Convert intent into a structured task with permissions and constraints |
-| `list_task_packets` | List all task packets |
-| `list_playbooks` | List available execution playbooks |
-| `run_playbook` | Execute a playbook by ID |
-| `get_noel_ledger` | Credits ledger and full audit trail |
-| `get_sentinel_rules` | View and manage Sentinel gate rules |
-
-### Scanner (4 tools)
+#### Scanner (4 tools)
 
 | Tool | Description |
 |------|-------------|
 | `score_token` | Risk and quality score for any token |
 | `check_token` | Contract audit flags and honeypot detection |
-| `scan_dips` | Find tokens currently dipping with recovery signals |
-| `scan_momentum` | Find tokens with strong upward momentum |
+| `scan_dips` | Tokens dipping with recovery signals |
+| `scan_momentum` | Tokens with strong upward momentum |
 
-### Research & Insight (3 tools)
+#### Research & Insight (3 tools)
 
 | Tool | Description |
 |------|-------------|
-| `ask_noel` | Crypto AI analyst — opinions, trade ideas, market outlook |
-| `market_thesis` | AI-generated investment thesis for any token or sector |
+| `ask_noel` | AI crypto analyst — opinions, trade ideas, market outlook |
+| `market_thesis` | Investment thesis for any token or sector |
 | `trade_plan` | Structured trade plan with entry, exit, and risk levels |
 
-### MiroShark (3 tools)
+#### Agent Network (15 tools)
+
+> Spin up multiple AI agents that research and monitor in parallel.
 
 | Tool | Description |
 |------|-------------|
-| `miroshark_simulate` | Run a multi-agent market simulation from plain English |
-| `miroshark_status` | Poll simulation progress and get the AI brief on completion |
-| `miroshark_stop` | Stop a running simulation |
+| `start_swarm` | Start the agent network |
+| `stop_swarm` | Stop the active swarm |
+| `get_swarm_status` | Status and shared memory snapshot |
+| `trigger_agent` | Run a specific agent now |
+| `write_swarm_memory` | Write to shared agent memory |
+| `get_swarm_memory` | Read from shared agent memory |
+| `get_execution_scores` | Performance scores across all agents |
+| `swarm_research` | Multi-agent research on any topic — saves to vault |
+| `swarm_brief` | Summary of everything the swarm has found |
+| `swarm_broadcast` | Send a message to all active agents |
+| `swarm_pulse` | Heartbeat — active agents and last activity |
+| `swarm_reflect` | Agents self-evaluate what went well |
+| `swarm_watch` | Watch a token or topic for changes |
+| `list_agents` | Browse available specialist agents |
+| `hire_agent` | Hire an agent for a specific task |
 
-### Coder (7 tools)
+---
+
+### 🛠 BUILD — Developer & Content Tools
 
 | Tool | Description |
 |------|-------------|
 | `scaffold_project` | Scaffold a DeFi or Web3 project |
-| `generate_component` | Generate a React component with wagmi/viem |
-| `generate_contract` | Generate a Solidity smart contract |
-| `audit_contract` | Audit a Solidity contract for vulnerabilities |
+| `generate_component` | React component with wagmi/viem |
+| `generate_contract` | Solidity smart contract |
+| `audit_contract` | Contract vulnerability audit |
 | `explain_code` | Explain any code in plain English |
-| `generate_mcp_skill` | Generate a new MCP tool from a plain English description |
+| `generate_mcp_skill` | Generate a new MCP tool from plain English |
 | `review_code` | Code review with actionable feedback |
-
-### Agents Marketplace (2 tools)
-
-| Tool | Description |
-|------|-------------|
-| `list_agents` | Browse available AI agents |
-| `hire_agent` | Hire an agent for a specific task |
-
-### Content & Humanizer (3 tools)
-
-| Tool | Description |
-|------|-------------|
-| `humanize_text` | Remove AI writing patterns — fixes 29 common AI tells |
-| `write_thread` | Write a Twitter/X thread on any topic |
-| `write_post` | Write a single social post — crypto, product, or general |
-
-### OS (3 tools)
-
-| Tool | Description |
-|------|-------------|
-| `noel_status` | Full system dashboard — memory usage, swarm health, active automations |
-| `noel_boot` | Boot sequence — starts swarm, loads market prices, returns a unified briefing |
-| `noel_shutdown` | Clean shutdown — stops swarm, saves session summary to vault |
-
-### Wallet & Notifications (2 tools)
-
-| Tool | Description |
-|------|-------------|
-| `get_wallet_address` | Get or generate your MCP wallet address |
-| `set_telegram` | Connect Telegram for notifications |
+| `humanize_text` | Remove AI writing patterns |
+| `write_thread` | Write a Twitter/X thread |
+| `write_post` | Write a social post |
+| `miroshark_simulate` | Multi-agent market simulation |
+| `miroshark_status` | Poll simulation progress |
+| `miroshark_stop` | Stop a running simulation |
 
 ---
 
