@@ -14,9 +14,44 @@ npx -y @noelclaw/mcp
 
 ## Install
 
-### Claude Code (CLI)
+### Terminal
+```bash
+npx -y @noelclaw/mcp
+```
+
+### Claude Code
 ```bash
 claude mcp add noelclaw -- npx -y @noelclaw/mcp
+```
+
+### Aeon
+
+Open **Settings → MCP Servers** and add:
+
+```json
+{
+  "mcpServers": {
+    "noelclaw": {
+      "command": "npx",
+      "args": ["-y", "@noelclaw/mcp"]
+    }
+  }
+}
+```
+
+### Hermes
+
+Open **Settings → MCP Servers** and add:
+
+```json
+{
+  "mcpServers": {
+    "noelclaw": {
+      "command": "npx",
+      "args": ["-y", "@noelclaw/mcp"]
+    }
+  }
+}
 ```
 
 ### Claude Desktop
@@ -34,7 +69,7 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/Library/App
 }
 ```
 
-### Cursor / Windsurf / Aeon / Hermes / Any MCP Client
+### Any Other MCP Client
 
 ```json
 {
