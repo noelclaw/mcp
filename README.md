@@ -130,45 +130,45 @@ Your AI loads your context before you type a single word.
 
 > Save research, decisions, and notes. Every entry is versioned and auto-tagged.
 
-| Tool | Description |
+| Name | Description |
 |------|-------------|
-| `vault_save` | Save a note or research entry |
-| `vault_read` | Read an entry by key |
-| `vault_list` | List recent entries |
-| `vault_search` | Full-text search across your vault |
-| `vault_history` | Version history for an entry |
-| `vault_diff` | Diff two versions |
-| `vault_export` | Export vault as JSON or markdown |
-| `vault_store_credential` | Securely store an API key or secret |
-| `vault_get_credential` | Retrieve a stored credential |
-| `vault_publish` | Publish an entry as a public note |
-| `vault_explore` | Browse by tag or category |
-| `vault_pin` | Pin an important entry |
-| `vault_delete` | Delete an entry |
-| `vault_link` | Link two entries together |
-| `vault_tag` | Add or update tags |
+| **Vault Save** `vault_save` | Save a note or research entry |
+| **Vault Read** `vault_read` | Read an entry by key |
+| **Vault List** `vault_list` | List recent entries |
+| **Vault Search** `vault_search` | Full-text search across your vault |
+| **Vault History** `vault_history` | Version history for an entry |
+| **Vault Diff** `vault_diff` | Compare two versions of an entry |
+| **Vault Export** `vault_export` | Export vault as JSON or markdown |
+| **Store Credential** `vault_store_credential` | Securely store an API key or secret |
+| **Get Credential** `vault_get_credential` | Retrieve a stored credential |
+| **Vault Publish** `vault_publish` | Publish an entry as a public note |
+| **Vault Explore** `vault_explore` | Browse by tag or category |
+| **Vault Pin** `vault_pin` | Pin an important entry to the top |
+| **Vault Delete** `vault_delete` | Delete an entry |
+| **Vault Link** `vault_link` | Link two entries together |
+| **Vault Tag** `vault_tag` | Add or update tags on an entry |
 
 #### Memory — Semantic Search (7 tools)
 
 > Find anything by meaning, not keywords. "What did I say about ETH yield?" just works.
 
-| Tool | Description |
+| Name | Description |
 |------|-------------|
-| `memory_add` | Add text, notes, or auto-fetch a URL into semantic memory |
-| `memory_search` | Search by meaning — natural language queries |
-| `memory_context` | Load entries relevant to the current session |
-| `memory_profile` | Your full memory profile — preferences, history, patterns |
-| `memory_list` | List recent memory entries |
-| `memory_delete` | Remove a memory entry |
-| `memory_insight` | AI-generated insights from your memory patterns |
+| **Memory Add** `memory_add` | Add text, notes, or auto-fetch a URL into semantic memory |
+| **Memory Search** `memory_search` | Search by meaning — natural language queries |
+| **Memory Context** `memory_context` | Load entries relevant to the current session |
+| **Memory Profile** `memory_profile` | Your full memory profile — preferences, history, patterns |
+| **Memory List** `memory_list` | List recent memory entries |
+| **Memory Delete** `memory_delete` | Remove a memory entry |
+| **Memory Insight** `memory_insight` | AI-generated insights from your memory patterns |
 
 #### OS — Session Lifecycle (3 tools)
 
-| Tool | Description |
+| Name | Description |
 |------|-------------|
-| `noel_boot` | Start a session — loads market data, memory, and automations in one command |
-| `noel_status` | Full system dashboard — memory, swarm health, active automations |
-| `noel_shutdown` | End a session — saves summary to vault, stops swarm cleanly |
+| **Boot** `noel_boot` | Start a session — loads market data, memory, and automations in one command |
+| **Status** `noel_status` | Full system dashboard — memory, swarm health, active automations |
+| **Shutdown** `noel_shutdown` | End a session — saves summary to vault, stops swarm cleanly |
 
 ---
 
@@ -178,57 +178,57 @@ Tell it what to do. It runs — on schedule, on-chain, or right now.
 
 #### Automations (6 tools)
 
-| Tool | Description |
+| Name | Description |
 |------|-------------|
-| `create_automation` | Create a price alert, DCA schedule, or recurring task in plain English |
-| `list_automations` | View all active automations |
-| `pause_automation` | Pause or resume an automation |
-| `delete_automation` | Delete an automation |
-| `get_automation_runs` | Execution history |
-| `run_automation` | Trigger an automation manually |
+| **Create Automation** `create_automation` | Create a price alert, DCA schedule, or recurring task in plain English |
+| **List Automations** `list_automations` | View all active automations |
+| **Pause Automation** `pause_automation` | Pause or resume an automation |
+| **Delete Automation** `delete_automation` | Delete an automation |
+| **Automation Runs** `get_automation_runs` | Execution history |
+| **Run Now** `run_automation` | Trigger an automation manually |
 
 #### DeFi Execution (7 tools)
 
 > Transactions are signed client-side — your private key never leaves your machine.
 
-| Tool | Description |
+| Name | Description |
 |------|-------------|
-| `get_portfolio` | View wallet holdings and token balances |
-| `estimate_swap` | Get a swap quote via 0x before executing |
-| `swap_tokens` | Execute a token swap on Base |
-| `send_token` | Send ETH or ERC-20 to any address |
-| `scan_wallet` | Analyze a wallet — holdings, activity, risk signals |
-| `analyze_wallet` | Deep wallet analysis with on-chain patterns |
-| `get_defi_yields` | Find the best yield opportunities on Base |
+| **Portfolio** `get_portfolio` | View wallet holdings and token balances |
+| **Estimate Swap** `estimate_swap` | Get a swap quote via 0x before executing |
+| **Swap Tokens** `swap_tokens` | Execute a token swap on Base |
+| **Send Token** `send_token` | Send ETH or ERC-20 to any address |
+| **Scan Wallet** `scan_wallet` | Analyze a wallet — holdings, activity, risk signals |
+| **Analyze Wallet** `analyze_wallet` | Deep wallet analysis with on-chain patterns |
+| **DeFi Yields** `get_defi_yields` | Find the best yield opportunities on Base |
 
 #### Base Chain (4 tools)
 
-| Tool | Description |
+| Name | Description |
 |------|-------------|
-| `base_chain_stats` | Live ETH price, gas price, latest block |
-| `base_query_vaults` | Top Morpho yield vaults ranked by APY |
-| `base_list_markets` | Moonwell lending and borrowing rates |
-| `base_prepare_deposit` | Prepare a deposit into a Morpho vault |
+| **Chain Stats** `base_chain_stats` | Live ETH price, gas price, latest block |
+| **Query Vaults** `base_query_vaults` | Top Morpho yield vaults ranked by APY |
+| **List Markets** `base_list_markets` | Moonwell lending and borrowing rates |
+| **Prepare Deposit** `base_prepare_deposit` | Prepare a deposit into a Morpho vault |
 
 #### Wallet & Notifications (2 tools)
 
-| Tool | Description |
+| Name | Description |
 |------|-------------|
-| `get_wallet_address` | Get or generate your MCP wallet address |
-| `set_telegram` | Connect Telegram for automation notifications |
+| **Wallet Address** `get_wallet_address` | Get or generate your MCP wallet address |
+| **Set Telegram** `set_telegram` | Connect Telegram for automation notifications |
 
 #### Playbooks (6 tools)
 
 > Reusable sequences with safety rules applied before any action runs.
 
-| Tool | Description |
+| Name | Description |
 |------|-------------|
-| `create_task_packet` | Convert intent into a structured task with constraints |
-| `list_task_packets` | List all task packets |
-| `list_playbooks` | Browse available playbooks |
-| `run_playbook` | Execute a playbook by ID |
-| `get_noel_ledger` | Credits and full audit trail |
-| `get_sentinel_rules` | View safety rules applied before actions |
+| **Create Task** `create_task_packet` | Convert intent into a structured task with constraints |
+| **List Tasks** `list_task_packets` | List all task packets |
+| **List Playbooks** `list_playbooks` | Browse available playbooks |
+| **Run Playbook** `run_playbook` | Execute a playbook by ID |
+| **Noel Ledger** `get_noel_ledger` | Credits and full audit trail |
+| **Sentinel Rules** `get_sentinel_rules` | View safety rules applied before actions |
 
 ---
 
@@ -238,72 +238,84 @@ Always informed before you act.
 
 #### Market & Prices (5 tools)
 
-| Tool | Description |
+| Name | Description |
 |------|-------------|
-| `get_market_data` | Live prices for BTC, ETH, SOL, and other tokens |
-| `get_token_data` | Token info — price, volume, market cap |
-| `compare_tokens` | Side-by-side comparison of two tokens |
-| `market_overview` | Top movers, sentiment, dominance snapshot |
-| `token_history` | Historical price data for any token |
+| **Market Data** `get_market_data` | Live prices for BTC, ETH, SOL, and other tokens |
+| **Token Data** `get_token_data` | Token info — price, volume, market cap |
+| **Compare Tokens** `compare_tokens` | Side-by-side comparison of two tokens |
+| **Market Overview** `market_overview` | Top movers, sentiment, dominance snapshot |
+| **Token History** `token_history` | Historical price data for any token |
 
 #### Scanner (4 tools)
 
-| Tool | Description |
+| Name | Description |
 |------|-------------|
-| `score_token` | Risk and quality score for any token |
-| `check_token` | Contract audit flags and honeypot detection |
-| `scan_dips` | Tokens dipping with recovery signals |
-| `scan_momentum` | Tokens with strong upward momentum |
+| **Score Token** `score_token` | Risk and quality score for any token |
+| **Check Token** `check_token` | Contract audit flags and honeypot detection |
+| **Scan Dips** `scan_dips` | Tokens dipping with recovery signals |
+| **Scan Momentum** `scan_momentum` | Tokens with strong upward momentum |
 
 #### Research & Insight (3 tools)
 
-| Tool | Description |
+| Name | Description |
 |------|-------------|
-| `ask_noel` | AI crypto analyst — opinions, trade ideas, market outlook |
-| `market_thesis` | Investment thesis for any token or sector |
-| `trade_plan` | Structured trade plan with entry, exit, and risk levels |
+| **Ask Noel** `ask_noel` | AI crypto analyst — opinions, trade ideas, market outlook |
+| **Market Thesis** `market_thesis` | Investment thesis for any token or sector |
+| **Trade Plan** `trade_plan` | Structured trade plan with entry, exit, and risk levels |
 
 #### Agent Network (15 tools)
 
 > Spin up multiple AI agents that research and monitor in parallel.
 
-| Tool | Description |
+| Name | Description |
 |------|-------------|
-| `start_swarm` | Start the agent network |
-| `stop_swarm` | Stop the active swarm |
-| `get_swarm_status` | Status and shared memory snapshot |
-| `trigger_agent` | Run a specific agent now |
-| `write_swarm_memory` | Write to shared agent memory |
-| `get_swarm_memory` | Read from shared agent memory |
-| `get_execution_scores` | Performance scores across all agents |
-| `swarm_research` | Multi-agent research on any topic — saves to vault |
-| `swarm_brief` | Summary of everything the swarm has found |
-| `swarm_broadcast` | Send a message to all active agents |
-| `swarm_pulse` | Heartbeat — active agents and last activity |
-| `swarm_reflect` | Agents self-evaluate what went well |
-| `swarm_watch` | Watch a token or topic for changes |
-| `list_agents` | Browse available specialist agents |
-| `hire_agent` | Hire an agent for a specific task |
+| **Start Swarm** `start_swarm` | Start the agent network |
+| **Stop Swarm** `stop_swarm` | Stop the active swarm |
+| **Swarm Status** `get_swarm_status` | Status and shared memory snapshot |
+| **Trigger Agent** `trigger_agent` | Run a specific agent now |
+| **Write Memory** `write_swarm_memory` | Write to shared agent memory |
+| **Read Memory** `get_swarm_memory` | Read from shared agent memory |
+| **Execution Scores** `get_execution_scores` | Performance scores across all agents |
+| **Swarm Research** `swarm_research` | Multi-agent research on any topic — saves to vault |
+| **Swarm Brief** `swarm_brief` | Summary of everything the swarm has found |
+| **Broadcast** `swarm_broadcast` | Send a message to all active agents |
+| **Swarm Pulse** `swarm_pulse` | Heartbeat — active agents and last activity |
+| **Swarm Reflect** `swarm_reflect` | Agents self-evaluate what went well |
+| **Swarm Watch** `swarm_watch` | Watch a token or topic for changes |
+| **List Agents** `list_agents` | Browse available specialist agents |
+| **Hire Agent** `hire_agent` | Hire an agent for a specific task |
 
 ---
 
 ### 🛠 BUILD — Developer & Content Tools
 
-| Tool | Description |
+#### Coder (7 tools)
+
+| Name | Description |
 |------|-------------|
-| `scaffold_project` | Scaffold a DeFi or Web3 project |
-| `generate_component` | React component with wagmi/viem |
-| `generate_contract` | Solidity smart contract |
-| `audit_contract` | Contract vulnerability audit |
-| `explain_code` | Explain any code in plain English |
-| `generate_mcp_skill` | Generate a new MCP tool from plain English |
-| `review_code` | Code review with actionable feedback |
-| `humanize_text` | Remove AI writing patterns |
-| `write_thread` | Write a Twitter/X thread |
-| `write_post` | Write a social post |
-| `miroshark_simulate` | Multi-agent market simulation |
-| `miroshark_status` | Poll simulation progress |
-| `miroshark_stop` | Stop a running simulation |
+| **Scaffold Project** `scaffold_project` | Scaffold a DeFi or Web3 project |
+| **Generate Component** `generate_component` | React component with wagmi/viem |
+| **Generate Contract** `generate_contract` | Solidity smart contract |
+| **Audit Contract** `audit_contract` | Contract vulnerability audit |
+| **Explain Code** `explain_code` | Explain any code in plain English |
+| **Generate MCP Skill** `generate_mcp_skill` | Generate a new MCP tool from plain English |
+| **Review Code** `review_code` | Code review with actionable feedback |
+
+#### Content & Humanizer (3 tools)
+
+| Name | Description |
+|------|-------------|
+| **Humanize Text** `humanize_text` | Strip AI patterns — makes output sound human |
+| **Write Thread** `write_thread` | Write a Twitter/X thread on any topic |
+| **Write Post** `write_post` | Write a punchy social post |
+
+#### MiroShark — Market Simulation (3 tools)
+
+| Name | Description |
+|------|-------------|
+| **Simulate** `miroshark_simulate` | Run a multi-agent market simulation from plain English |
+| **Simulation Status** `miroshark_status` | Poll progress and get the AI brief on completion |
+| **Stop Simulation** `miroshark_stop` | Stop a running simulation |
 
 ---
 
