@@ -50,11 +50,6 @@ export const DEFI_TOOLS: Tool[] = [
     },
   },
   {
-    name: "scan_wallet",
-    description: "AI-powered portfolio scan — concentration risk, volatility exposure, Base ecosystem opportunities, and a concrete 3-step action plan based on your actual holdings. Requires wallet auth.",
-    inputSchema: { type: "object", properties: {}, required: [] },
-  },
-  {
     name: "analyze_wallet",
     description:
       "AI-powered analysis of any public wallet on Base — not just your own. " +
@@ -188,53 +183,6 @@ export async function handleDefiTool(name: string, args: unknown): Promise<ToolR
           text: [`✅ Sent!`, `${amount} ${token.toUpperCase()} → \`${toAddress}\``, `Tx Hash: \`${txHash}\``, `https://basescan.org/tx/${txHash}`].join("\n"),
         }],
       };
-    }
-
-    case "scan_wallet": {
-      const data = await callConvex("/wallet/scan", "GET", undefined, "scan_wallet") as {
-        address?: string;
-        totalUsd?: number;
-        holdings?: Array<{ token: string; balance: number; valueUsd: number | null; pct: number | null }>;
-        analysis?: string | null;
-        analysisError?: string;
-        tokensUsed?: number;
-        scannedAt?: string;
-        error?: string;
-      };
-
-      if (data.error) {
-        return { content: [{ type: "text", text: `Scan failed: ${data.error}` }], isError: true };
-      }
-
-      const total = (data.totalUsd ?? 0).toFixed(2);
-      const topHoldings = (data.holdings ?? [])
-        .slice(0, 5)
-        .map((h) => `• **${h.token}**: $${(h.valueUsd ?? 0).toFixed(2)}${h.pct != null ? ` (${h.pct}%)` : ""}`)
-        .join("\n");
-
-      const header = [
-        `**Portfolio Scan** — Total: $${total}`,
-        `Wallet: \`${data.address ?? "unknown"}\``,
-        ``,
-        `**Holdings:**`,
-        topHoldings,
-        ``,
-      ].join("\n");
-
-      let body: string;
-      if (data.analysis) {
-        body = data.analysis;
-      } else if (data.analysisError) {
-        body = `*AI analysis unavailable: ${data.analysisError}*`;
-      } else {
-        body = "*AI analysis not available*";
-      }
-
-      const footer = data.tokensUsed
-        ? `\n\n*Tokens used: ${data.tokensUsed} · Scanned: ${data.scannedAt ?? ""}*`
-        : "";
-
-      return { content: [{ type: "text", text: header + body + footer }] };
     }
 
     case "analyze_wallet": {

@@ -32,57 +32,6 @@ function err(text: string): ToolResult {
 
 export const CODER_TOOLS: Tool[] = [
   {
-    name: "scaffold_project",
-    description:
-      "Generate a complete project scaffold for a described idea — file tree + key file contents. " +
-      "Supports: Solidity contract projects, MCP skill packages, React/Next.js dApps, Convex backends, CLI tools.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        description: {
-          type: "string",
-          description: "What to build — be specific: tech stack, purpose, target chain, key features",
-        },
-        stack: {
-          type: "string",
-          enum: ["solidity", "mcp-skill", "react-dapp", "convex-backend", "node-cli", "auto"],
-          description: "Tech stack. Use 'auto' to let Noel decide based on description.",
-        },
-        extras: {
-          type: "string",
-          description: "Optional: extra requirements, constraints, or preferred libraries",
-        },
-      },
-      required: ["description"],
-    },
-  },
-
-  {
-    name: "generate_component",
-    description:
-      "Generate a production-ready React/TypeScript component. Returns the full .tsx file content. " +
-      "Includes props typing, Tailwind styling, and any hooks needed.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        description: {
-          type: "string",
-          description: "What the component does, what it shows, and how it should behave",
-        },
-        name: {
-          type: "string",
-          description: "Component name in PascalCase, e.g. 'TokenPriceCard'",
-        },
-        context: {
-          type: "string",
-          description: "Optional: existing imports, store usage, or API calls the component should use",
-        },
-      },
-      required: ["description", "name"],
-    },
-  },
-
-  {
     name: "generate_contract",
     description:
       "Generate a Solidity smart contract from a description. Returns the full .sol file. " +
@@ -209,18 +158,6 @@ export const CODER_TOOLS: Tool[] = [
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
-const ScaffoldSchema = z.object({
-  description: z.string().min(10),
-  stack: z.enum(["solidity", "mcp-skill", "react-dapp", "convex-backend", "node-cli", "auto"]).optional(),
-  extras: z.string().optional(),
-});
-
-const ComponentSchema = z.object({
-  description: z.string().min(5),
-  name: z.string().min(1),
-  context: z.string().optional(),
-});
-
 const ContractSchema = z.object({
   description: z.string().min(5),
   name: z.string().min(1),
@@ -251,58 +188,6 @@ const McpSkillSchema = z.object({
 
 export async function handleCoderTool(name: string, args: unknown): Promise<ToolResult | null> {
   switch (name) {
-
-    case "scaffold_project": {
-      const p = ScaffoldSchema.safeParse(args);
-      if (!p.success) return err(`Invalid input: ${p.error.message}`);
-      const { description, stack = "auto", extras } = p.data;
-
-      const prompt =
-        `Generate a complete project scaffold for the following:\n\n` +
-        `Description: ${description}\n` +
-        `Stack: ${stack}\n` +
-        (extras ? `Extra requirements: ${extras}\n` : "") +
-        `\nOutput format:\n` +
-        `1. Brief overview (2-3 sentences)\n` +
-        `2. Full file tree with all files listed\n` +
-        `3. Full content of each key file (package.json, main entry, config, one core module)\n` +
-        `4. Setup instructions (3-5 steps)\n\n` +
-        `Use real, runnable code. No TODO placeholders.`;
-
-      try {
-        const response = await callLLM(CODER_SYSTEM, prompt, 4096);
-        return ok(response);
-      } catch (e: any) {
-        return err(`scaffold_project failed: ${e.message}`);
-      }
-    }
-
-    case "generate_component": {
-      const p = ComponentSchema.safeParse(args);
-      if (!p.success) return err(`Invalid input: ${p.error.message}`);
-      const { description, name: componentName, context } = p.data;
-
-      const prompt =
-        `Generate a production-ready React TypeScript component.\n\n` +
-        `Component name: ${componentName}\n` +
-        `Description: ${description}\n` +
-        (context ? `Context / existing code to integrate with:\n${context}\n` : "") +
-        `\nRequirements:\n` +
-        `- Full .tsx file, no omissions\n` +
-        `- TypeScript props interface\n` +
-        `- Tailwind CSS for styling\n` +
-        `- Use lucide-react for icons if needed\n` +
-        `- Framer Motion for animations if the component is interactive\n` +
-        `- Named export (not default)\n` +
-        `Output only the .tsx file content, no prose before or after.`;
-
-      try {
-        const response = await callLLM(CODER_SYSTEM, prompt, 3000);
-        return ok(response);
-      } catch (e: any) {
-        return err(`generate_component failed: ${e.message}`);
-      }
-    }
 
     case "generate_contract": {
       const p = ContractSchema.safeParse(args);

@@ -39,21 +39,21 @@ function containsSensitiveRequest(args: unknown): boolean {
 export const ALL_TOOLS = [
   ...MARKET_TOOLS,       // 5 — get_market_data, get_token_data, compare_tokens, market_overview, token_history
   ...INSIGHT_TOOLS,      // 3 — ask_noel, market_thesis, trade_plan
-  ...DEFI_TOOLS,         // 7 — get_portfolio, estimate_swap, swap_tokens, send_token, scan_wallet, analyze_wallet, get_defi_yields
+  ...DEFI_TOOLS,         // 6 — get_portfolio, estimate_swap, swap_tokens, send_token, analyze_wallet, get_defi_yields
   ...AUTOMATION_TOOLS,   // 6 — create, list, pause, delete, get_runs, run
-  ...SWARM_TOOLS,        // 13 — start, stop, status, read/write memory, scores, research, brief, trigger_agent, broadcast, pulse, reflect, watch
-  ...FRAMEWORK_TOOLS,    // 6 — task packets, playbooks, sentinel, ledger
-  ...VAULT_TOOLS,        // 15 — save, read, list, search, history, diff, export, store_credential, get_credential, publish, explore, pin, delete, link, tag
+  ...SWARM_TOOLS,        // 6 — start, stop, status, research, trigger_agent, brief
+  ...FRAMEWORK_TOOLS,    // 3 — list_playbooks, run_playbook, get_noel_ledger
+  ...VAULT_TOOLS,        // 12 — save, read, list, search, history, diff, export, store_credential, get_credential, pin, delete, tag
   ...WALLET_TOOLS,       // 2 — get_wallet_address, set_telegram
   ...MIROSHARK_TOOLS,    // 3 — simulate, status, stop
   ...HUMANIZER_TOOLS,    // 3 — humanize_text, write_thread, write_post
   ...AGENT_TOOLS,        // 2 — list_agents, hire_agent
   ...SCANNER_TOOLS,      // 4 — score_token, check_token, scan_dips, scan_momentum
-  ...CODER_TOOLS,        // 7 — scaffold_project, generate_component, generate_contract, audit_contract, explain_code, review_code, generate_mcp_skill
+  ...CODER_TOOLS,        // 5 — generate_contract, audit_contract, explain_code, review_code, generate_mcp_skill
   ...BASE_TOOLS,         // 4 — query_vaults, list_markets, prepare_deposit, chain_stats
   ...MEMORY_TOOLS,       // 7 — memory_add, memory_search, memory_context, memory_profile, memory_list, memory_delete, memory_insight
   ...OS_TOOLS,           // 3 — noel_status, noel_boot, noel_shutdown
-  // total: 90
+  // total: 74
 ];
 
 // Build O(1) dispatch map at startup — avoids sequential chained awaits per call

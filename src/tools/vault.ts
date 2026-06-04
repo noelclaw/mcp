@@ -5,7 +5,6 @@ import { ToolResult } from "../types.js";
 import { syncToSupermemory, searchSupermemory } from "./memory.js";
 
 const VAULT_TYPES = ["research", "execution", "workflow", "prompt", "file", "memory", "credential"] as const;
-const LINK_RELATIONS = ["references", "derived_from", "supersedes", "related", "continues"] as const;
 
 export const VAULT_TOOLS: Tool[] = [
   {
@@ -147,38 +146,6 @@ export const VAULT_TOOLS: Tool[] = [
     },
   },
   {
-    name: "vault_publish",
-    description:
-      "Publish a vault entry to the community vault so other Noelclaw users can discover and fork it. " +
-      "Credentials are never published — only research, prompts, workflows, memory, and execution entries. " +
-      "You can also unpublish by setting isPublic to false.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        key: { type: "string", description: "Entry key to publish or unpublish" },
-        isPublic: { type: "boolean", description: "true to publish, false to unpublish (default true)" },
-        authorName: { type: "string", description: "Display name shown to the community (default: Anonymous)" },
-      },
-      required: ["key"],
-    },
-  },
-  {
-    name: "vault_explore",
-    description:
-      "Browse the community vault — public entries shared by all Noelclaw users. " +
-      "Discover research, prompts, and workflows published by the community. " +
-      "Use vault_save to fork any entry into your own vault.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        type: { type: "string", enum: ["research", "execution", "workflow", "prompt", "file", "memory"], description: "Filter by entry type" },
-        search: { type: "string", description: "Search query to filter community entries" },
-        limit: { type: "number", description: "Max entries to return (default 20)" },
-      },
-      required: [],
-    },
-  },
-  {
     name: "vault_pin",
     description:
       "Pin or unpin a Noel-Vault entry. Pinned entries always appear first in vault_list and are " +
@@ -203,21 +170,6 @@ export const VAULT_TOOLS: Tool[] = [
         key: { type: "string", description: "Entry key to delete permanently" },
       },
       required: ["key"],
-    },
-  },
-  {
-    name: "vault_link",
-    description:
-      "Create a semantic link between two Noel-Vault entries. Links appear in vault_read output and " +
-      "help agents navigate related knowledge. Relations: references | derived_from | supersedes | related | continues.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        fromKey: { type: "string", description: "Source entry key" },
-        toKey: { type: "string", description: "Target entry key" },
-        relation: { type: "string", enum: [...LINK_RELATIONS], description: "Relationship type (default: related)" },
-      },
-      required: ["fromKey", "toKey"],
     },
   },
   {
@@ -268,11 +220,8 @@ const DiffSchema = z.object({ key: z.string().min(1), fromVersion: z.number(), t
 const ExportSchema = z.object({ type: z.enum(VAULT_TYPES).optional() });
 const StoreCredentialSchema = z.object({ name: z.string().min(1), value: z.string().min(1), description: z.string().optional() });
 const GetCredentialSchema = z.object({ name: z.string().min(1) });
-const PublishSchema = z.object({ key: z.string().min(1), isPublic: z.boolean().optional(), authorName: z.string().optional() });
-const ExploreSchema = z.object({ type: z.enum(["research", "execution", "workflow", "prompt", "file", "memory"]).optional(), search: z.string().optional(), limit: z.number().optional() });
 const PinSchema = z.object({ key: z.string().min(1), pinned: z.boolean().optional() });
 const DeleteSchema = z.object({ key: z.string().min(1) });
-const LinkSchema = z.object({ fromKey: z.string().min(1), toKey: z.string().min(1), relation: z.enum(LINK_RELATIONS).optional() });
 const TagSchema = z.object({ key: z.string().min(1), tags: z.array(z.string()).min(1), replace: z.boolean().optional() });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -489,50 +438,6 @@ export async function handleVaultTool(name: string, args: unknown): Promise<Tool
       return { content: [{ type: "text", text: lines.join("\n") }] };
     }
 
-    case "vault_publish": {
-      const parsed = PublishSchema.safeParse(args);
-      if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
-      const { key, isPublic = true, authorName } = parsed.data;
-      const endpoint = isPublic ? "/vault/publish" : "/vault/unpublish";
-      const data = await callConvex(endpoint, "POST", { key, authorName }, "vault_publish");
-      if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
-      return {
-        content: [{
-          type: "text",
-          text: isPublic
-            ? `🌐 **Published to community vault**\nKey: \`${key}\`\nOther Noelclaw users can now discover this entry.\nUse \`vault_publish key: "${key}" isPublic: false\` to unpublish.`
-            : `🔒 **Unpublished**\nKey: \`${key}\` is now private.`,
-        }],
-      };
-    }
-
-    case "vault_explore": {
-      const parsed = ExploreSchema.safeParse(args ?? {});
-      if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
-      const params = new URLSearchParams();
-      if (parsed.data.type) params.set("type", parsed.data.type);
-      if (parsed.data.search) params.set("search", parsed.data.search);
-      if (parsed.data.limit) params.set("limit", String(parsed.data.limit));
-      const data = await callConvex(`/vault/community?${params}`, "GET", undefined, "vault_explore");
-      if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
-
-      const entries: any[] = data.entries ?? [];
-      if (!entries.length) return { content: [{ type: "text", text: `No community vault entries found${parsed.data.type ? ` of type '${parsed.data.type}'` : ""}.${parsed.data.search ? ` Try a different search term.` : "\nBe the first to publish with vault_publish!"}` }] };
-
-      const header = `🌐 **Community Vault** — ${entries.length} public entries`;
-      const rows = entries.map((e) => [
-        `**[${e.type}]** ${e.title}  ·  by ${e.authorName ?? "Anonymous"}`,
-        `  \`${e.key}\`  ·  v${e.version}  ·  ${formatDate(e.updatedAt)}`,
-        e.content ? `  ${e.content.slice(0, 100)}${e.content.length > 100 ? "…" : ""}` : "",
-      ].filter(Boolean).join("\n"));
-      return {
-        content: [{
-          type: "text",
-          text: [header, "", ...rows, "", "To fork an entry: `vault_save type: <type> title: <title> content: <content>`"].join("\n"),
-        }],
-      };
-    }
-
     case "vault_pin": {
       const parsed = PinSchema.safeParse(args);
       if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
@@ -548,15 +453,6 @@ export async function handleVaultTool(name: string, args: unknown): Promise<Tool
       const data = await callConvex("/vault/delete", "POST", { key: parsed.data.key }, "vault_delete");
       if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
       return { content: [{ type: "text", text: `🗑️ Deleted: \`${parsed.data.key}\` (${data.versionsRemoved ?? 0} versions removed)` }] };
-    }
-
-    case "vault_link": {
-      const parsed = LinkSchema.safeParse(args);
-      if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
-      const { fromKey, toKey, relation = "related" } = parsed.data;
-      const data = await callConvex("/vault/link", "POST", { fromKey, toKey, relation }, "vault_link");
-      if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
-      return { content: [{ type: "text", text: `🔗 Linked: \`${fromKey}\` → [${relation}] → \`${toKey}\`` }] };
     }
 
     case "vault_tag": {

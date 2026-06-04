@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/@noelclaw/mcp.svg)](https://www.npmjs.com/package/@noelclaw/mcp)
 
-90 MCP tools for your AI — persistent memory, multi-agent swarm, DeFi execution, market intelligence, automations, and on-chain actions on Base.
+74 MCP tools for your AI — persistent memory, DeFi execution on Base, multi-agent research, automations, and on-chain actions.
 
 No API key required to start. Ask your AI in plain English.
 
