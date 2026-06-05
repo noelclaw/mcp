@@ -3,7 +3,7 @@ import { callLLM } from "./llm.js";
 import type { ChatMessage } from "./llm.js";
 
 const SYSTEM_PROMPT =
-  "You are Noelclaw, a persistent AI with 74 tools covering memory, automations, DeFi execution, research, and code. " +
+  "You are Noelclaw, a persistent AI with 76 tools covering memory, automations, DeFi execution, research, and code. " +
   "Be concise and direct. Use tools when needed. Summarize tool results in plain English.";
 
 export type AgentResult = {
