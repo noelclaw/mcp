@@ -18,6 +18,8 @@ import { CODER_TOOLS, handleCoderTool } from "./tools/coder.js";
 import { BASE_TOOLS, handleBaseTool } from "./tools/base.js";
 import { MEMORY_TOOLS, handleMemoryTool } from "./tools/memory.js";
 import { OS_TOOLS, handleOsTool } from "./tools/os.js";
+import { RESEARCH_TOOLS, handleResearchTool } from "./tools/research.js";
+import { MONITOR_TOOLS, handleMonitorTool } from "./tools/monitor.js";
 
 const PRIVATE_KEY_RESPONSE = {
   content: [{
@@ -53,7 +55,9 @@ export const ALL_TOOLS = [
   ...BASE_TOOLS,         // 4 — query_vaults, list_markets, prepare_deposit, chain_stats
   ...MEMORY_TOOLS,       // 9 — memory_add, memory_search, memory_context, memory_profile, memory_list, memory_delete, memory_insight, memory_extract, memory_consolidate
   ...OS_TOOLS,           // 3 — noel_status, noel_boot, noel_shutdown
-  // total: 76
+  ...RESEARCH_TOOLS,     // 2 — web_scrape, web_search
+  ...MONITOR_TOOLS,      // 3 — create_monitor, list_monitors, cancel_monitor
+  // total: 81
 ];
 
 // Build O(1) dispatch map at startup — avoids sequential chained awaits per call
@@ -74,7 +78,9 @@ export const HANDLER_MAP = new Map<string, Handler>([
   ...CODER_TOOLS.map(t       => [t.name, handleCoderTool]       as [string, Handler]),
   ...BASE_TOOLS.map(t        => [t.name, handleBaseTool]        as [string, Handler]),
   ...MEMORY_TOOLS.map(t      => [t.name, handleMemoryTool]      as [string, Handler]),
-  ...OS_TOOLS.map(t           => [t.name, handleOsTool]           as [string, Handler]),
+  ...OS_TOOLS.map(t          => [t.name, handleOsTool]           as [string, Handler]),
+  ...RESEARCH_TOOLS.map(t    => [t.name, handleResearchTool]     as [string, Handler]),
+  ...MONITOR_TOOLS.map(t     => [t.name, handleMonitorTool]      as [string, Handler]),
 ]);
 
 export const server = new Server(

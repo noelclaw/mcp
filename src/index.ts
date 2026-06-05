@@ -53,6 +53,8 @@ async function main() {
     { label: "Base",       count: 4,  tools: "query_vaults · list_markets · prepare_deposit · chain_stats" },
     { label: "Memory",     count: 9,  tools: "add · search · context · profile · list · delete · insight · extract · consolidate" },
     { label: "OS",         count: 3,  tools: "noel_boot · noel_status · noel_shutdown" },
+    { label: "Research",   count: 2,  tools: "web_scrape · web_search" },
+    { label: "Monitor",    count: 3,  tools: "create_monitor · list_monitors · cancel_monitor" },
   ];
 
   const total = ALL_TOOLS.length;
@@ -66,7 +68,7 @@ async function main() {
     ? `Bankr  ${C.dim}grok-3${C.reset}`
     : `Noelclaw  ${C.dim}proxy · auto-wallet${C.reset}`;
 
-  line("version", `v3.2.1  ${C.dim}MCP protocol 2.1.0${C.reset}`);
+  line("version", `v3.3.0  ${C.dim}MCP protocol 2.1.0${C.reset}`);
   line("network",  `Base mainnet  ${C.dim}via 0x Protocol · ethers v6${C.reset}`);
   line("ai",       aiMode);
   line("tools",    `${C.white}${C.bold}${total} tools loaded${C.reset}  ${C.dim}across ${categories.length} categories${C.reset}`);

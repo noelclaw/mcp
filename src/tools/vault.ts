@@ -246,7 +246,8 @@ export async function handleVaultTool(name: string, args: unknown): Promise<Tool
       if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
 
       // Auto-generate title from content if not provided
-      const autoTitle = parsed.data.title ?? parsed.data.content.split("\n")[0].replace(/^#+\s*/, "").slice(0, 80) || `${parsed.data.type} — ${new Date().toISOString().slice(0, 10)}`;
+      const firstLine = parsed.data.content.split("\n")[0].replace(/^#+\s*/, "").slice(0, 80);
+      const autoTitle = parsed.data.title ?? (firstLine || `${parsed.data.type} — ${new Date().toISOString().slice(0, 10)}`);
       const savePayload = { ...parsed.data, title: autoTitle };
 
       const data = await callConvex("/vault/save", "POST", savePayload, "vault_save");
