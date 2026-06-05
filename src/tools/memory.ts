@@ -137,6 +137,38 @@ export const MEMORY_TOOLS: Tool[] = [
       required: ["topic"],
     },
   },
+  {
+    name: "memory_extract",
+    description:
+      "Auto-extract discrete facts, preferences, and decisions from any text and save them individually to semantic memory. " +
+      "Instead of storing a wall of text, Noelclaw breaks it into 3-10 searchable atomic facts using AI. " +
+      "Best for processing chat logs, research notes, meeting summaries, or any unstructured content. " +
+      "Each extracted fact becomes independently searchable — 'what do I prefer about staking?' will find it.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        text: { type: "string", description: "Text to extract facts from — notes, research, chat logs, any unstructured content" },
+        source: { type: "string", description: "Optional label for where this came from (e.g. 'telegram', 'research', 'meeting')" },
+      },
+      required: ["text"],
+    },
+  },
+  {
+    name: "memory_consolidate",
+    description:
+      "Fetch all memories on a topic and consolidate them into a single comprehensive summary using AI. " +
+      "Removes redundancy, merges overlapping facts, and saves the result as a new 'consolidated' memory. " +
+      "Use this to clean up fragmented knowledge after heavy research sessions. " +
+      "Returns the summary and saves it automatically — the original memories remain intact.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        topic: { type: "string", description: "Topic to consolidate memories for (e.g. 'ETH liquid staking', 'Base DeFi')" },
+        limit: { type: "number", description: "Max source memories to consolidate (default 12)" },
+      },
+      required: ["topic"],
+    },
+  },
 ];
 
 // ─── Zod schemas ─────────────────────────────────────────────────────────────
@@ -167,6 +199,14 @@ const DeleteMemSchema = z.object({ id: z.string().min(1) });
 const InsightSchema = z.object({
   topic: z.string().min(1),
   depth: z.enum(["quick", "standard", "deep"]).optional(),
+});
+const ExtractSchema = z.object({
+  text: z.string().min(1),
+  source: z.string().optional(),
+});
+const ConsolidateSchema = z.object({
+  topic: z.string().min(1),
+  limit: z.number().optional(),
 });
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
@@ -401,6 +441,49 @@ export async function handleMemoryTool(name: string, args: unknown): Promise<Too
       lines.push(`• \`swarm_watch topic: "${topic}"\` — monitor this topic continuously`);
 
       return { content: [{ type: "text", text: lines.filter(l => l !== undefined).join("\n") }] };
+    }
+
+    case "memory_extract": {
+      const parsed = ExtractSchema.safeParse(args);
+      if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
+      const { text, source = "extract" } = parsed.data;
+      const data = await callConvex("/memory/extract", "POST", { text, source }).catch((err: any) => ({ error: err.message }));
+      if (data?.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
+      const facts: string[] = data?.facts ?? [];
+      return {
+        content: [{
+          type: "text",
+          text: [
+            `🧠 **Auto-extracted ${data?.extracted ?? facts.length} facts** (${data?.saved ?? 0} saved)`,
+            ``,
+            ...facts.map((f: string, i: number) => `${i + 1}. ${f}`),
+            ``,
+            `All facts are now searchable via \`memory_search\`.`,
+          ].join("\n"),
+        }],
+      };
+    }
+
+    case "memory_consolidate": {
+      const parsed = ConsolidateSchema.safeParse(args);
+      if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
+      const { topic, limit = 12 } = parsed.data;
+      const data = await callConvex("/memory/consolidate", "POST", { topic, n: limit }).catch((err: any) => ({ error: err.message }));
+      if (data?.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
+      return {
+        content: [{
+          type: "text",
+          text: [
+            `🧠 **Consolidated "${topic}"** — merged ${data?.consolidatedFrom ?? "?"} memories`,
+            `Saved as: \`${data?.id ?? "consolidated"}\``,
+            ``,
+            `**Summary:**`,
+            data?.summary ?? "",
+            ``,
+            `Use \`memory_search query: "${topic}"\` to find it.`,
+          ].join("\n"),
+        }],
+      };
     }
 
     default:

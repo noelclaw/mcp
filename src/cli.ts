@@ -17,7 +17,7 @@ const C = {
 };
 
 const BANNER = `
-${C.cyan}${C.bold}  NOELCLAW${C.reset}  ${C.dim}v3.0.0 · 74 tools · persistent AI${C.reset}
+${C.cyan}${C.bold}  NOELCLAW${C.reset}  ${C.dim}v3.2.0 · 76 tools · persistent AI${C.reset}
   ${C.dim}─────────────────────────────────────────${C.reset}
   ${C.dim}Type anything. /help for commands. Ctrl+C to exit.${C.reset}
 `;

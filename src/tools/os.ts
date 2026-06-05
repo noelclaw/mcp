@@ -122,12 +122,14 @@ export async function handleOsTool(name: string, args: unknown): Promise<ToolRes
       if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
       const { focus } = parsed.data;
 
-      const [swarmRes, marketRes, autoRes, memRes, focusRes] = await Promise.allSettled([
+      const [swarmRes, marketRes, autoRes, memRes, focusRes, prefRes] = await Promise.allSettled([
         callConvex("/swarm/start", "POST", {}, "start_swarm"),
         fetchMarketSnapshot(),
         callConvex("/automations/list", "GET", undefined, "list_automations"),
         callConvex("/memory/profile", "GET"),
-        focus ? searchSupermemory(focus, 4) : Promise.resolve([] as any[]),
+        focus ? searchSupermemory(focus, 5) : Promise.resolve([] as any[]),
+        // Always load user preference/context memories for smart boot
+        searchSupermemory("user preferences style goals priorities", 4),
       ]);
 
       const swarm    = swarmRes.status   === "fulfilled" ? swarmRes.value   : null;
@@ -135,6 +137,7 @@ export async function handleOsTool(name: string, args: unknown): Promise<ToolRes
       const autos    = autoRes.status    === "fulfilled" ? autoRes.value    : null;
       const mem      = memRes.status     === "fulfilled" ? memRes.value     : null;
       const focusMem = focusRes.status   === "fulfilled" ? focusRes.value as any[] : [];
+      const prefMem  = prefRes.status    === "fulfilled" ? prefRes.value as any[] : [];
 
       const automations: any[] = autos?.automations ?? [];
       const activeAutos = automations.filter((a: any) => a.status === "active");
@@ -168,6 +171,16 @@ export async function handleOsTool(name: string, args: unknown): Promise<ToolRes
         lines.push("");
       }
 
+      // Always show user context memories if available
+      if (prefMem.length > 0) {
+        lines.push(`**User context loaded (${prefMem.length} preferences):**`);
+        for (const r of prefMem) {
+          const title = r.metadata?.title ?? r.content.slice(0, 80).replace(/\n/g, " ");
+          lines.push(`  • ${title}`);
+        }
+        lines.push("");
+      }
+
       if (focus && focusMem.length > 0) {
         lines.push(`**Memory context for "${focus}" (${focusMem.length} items):**`);
         for (const r of focusMem) {
@@ -186,6 +199,7 @@ export async function handleOsTool(name: string, args: unknown): Promise<ToolRes
         lines.push(`  • \`swarm_research topic: "BTC"\` — start morning research`);
         lines.push(`  • \`noel_status\` — full system dashboard`);
       }
+      lines.push(`  • \`memory_extract text: "...\"\` — auto-save facts from any note`);
 
       return { content: [{ type: "text", text: lines.join("\n") }] };
     }

@@ -51,9 +51,9 @@ export const ALL_TOOLS = [
   ...SCANNER_TOOLS,      // 4 — score_token, check_token, scan_dips, scan_momentum
   ...CODER_TOOLS,        // 5 — generate_contract, audit_contract, explain_code, review_code, generate_mcp_skill
   ...BASE_TOOLS,         // 4 — query_vaults, list_markets, prepare_deposit, chain_stats
-  ...MEMORY_TOOLS,       // 7 — memory_add, memory_search, memory_context, memory_profile, memory_list, memory_delete, memory_insight
+  ...MEMORY_TOOLS,       // 9 — memory_add, memory_search, memory_context, memory_profile, memory_list, memory_delete, memory_insight, memory_extract, memory_consolidate
   ...OS_TOOLS,           // 3 — noel_status, noel_boot, noel_shutdown
-  // total: 74
+  // total: 76
 ];
 
 // Build O(1) dispatch map at startup — avoids sequential chained awaits per call
@@ -78,7 +78,7 @@ export const HANDLER_MAP = new Map<string, Handler>([
 ]);
 
 export const server = new Server(
-  { name: "noelclaw", version: "3.0.0" },
+  { name: "noelclaw", version: "3.2.0" },
   { capabilities: { tools: {} } }
 );
 
