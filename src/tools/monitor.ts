@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
+import { callConvex } from "../convex.js";
 import { ToolResult } from "../types.js";
 
 const TRIGGER_BASE = "https://api.trigger.dev/api/v3";
-// The deployed Trigger.dev task ID — users deploy via: npx trigger.dev@latest deploy
 const MONITOR_TASK_ID = "noelclaw-monitor";
 
 export const MONITOR_TOOLS: Tool[] = [
@@ -97,18 +97,14 @@ export async function handleMonitorTool(name: string, args: unknown): Promise<To
 
     const { topic, schedule, label } = parsed.data;
     const cron = resolveCron(schedule);
-    const externalId = `noelclaw-${topic.toLowerCase().replace(/\s+/g, "-").slice(0, 40)}-${Date.now()}`;
+    // Unique stable ID — worker reads config from vault using this as key
+    const externalId = `monitor-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
     try {
       const res = await fetch(`${TRIGGER_BASE}/schedules`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
-        body: JSON.stringify({
-          taskIdentifier: MONITOR_TASK_ID,
-          cron,
-          externalId,
-          metadata: { topic, label: label ?? topic },
-        }),
+        body: JSON.stringify({ taskIdentifier: MONITOR_TASK_ID, cron, externalId }),
         signal: AbortSignal.timeout(10_000),
       });
 
@@ -118,6 +114,19 @@ export async function handleMonitorTool(name: string, args: unknown): Promise<To
       }
 
       const data = await res.json() as any;
+      const scheduleId: string = data.id ?? externalId;
+
+      // Save config to vault so the worker can retrieve topic + metadata
+      callConvex("/vault/save", "POST", {
+        type: "config",
+        title: `Monitor: ${label ?? topic}`,
+        content: JSON.stringify({ topic, label: label ?? topic, cron, scheduleId, externalId }),
+        key: `monitor-config/${externalId}`,
+        agentId: "os",
+        tags: ["monitor-config"],
+        commitMsg: "create_monitor config",
+      }, "create_monitor").catch(() => {});
+
       return {
         content: [{
           type: "text",
@@ -126,7 +135,7 @@ export async function handleMonitorTool(name: string, args: unknown): Promise<To
             ``,
             `📌 Topic:    ${topic}`,
             `🕐 Schedule: ${cron}${CRON_PRESETS[schedule] ? ` (${schedule})` : ""}`,
-            `🆔 ID:       ${data.id}`,
+            `🆔 ID:       ${scheduleId}`,
             data.nextRun ? `⏭️ Next run: ${new Date(data.nextRun).toUTCString()}` : "",
             ``,
             `The agent will research "${topic}" on schedule, save findings to vault, and send a Telegram notification if configured.`,
