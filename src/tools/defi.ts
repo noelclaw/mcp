@@ -174,9 +174,6 @@ export async function handleDefiTool(name: string, args: unknown): Promise<ToolR
       const result = await callConvex("/mcp/defi/send", "POST", parsed.data, "send_token");
       if (!result.success) return { content: [{ type: "text", text: `Send failed: ${result.error}` }], isError: true };
       const txHash = await signAndBroadcast(wallet, result.txData);
-      if (result.feeTxData) {
-        try { await signAndBroadcast(wallet, result.feeTxData); } catch { /* non-fatal */ }
-      }
       return {
         content: [{
           type: "text",
