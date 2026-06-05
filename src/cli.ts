@@ -58,11 +58,14 @@ async function main() {
   process.stdout.write(BANNER);
 
   // Detect active LLM
+  const hasConvexAuth = !!(process.env.NOELCLAW_SESSION_TOKEN || process.env.NOELCLAW_API_KEY);
   const mode = process.env.ANTHROPIC_API_KEY
     ? `${C.green}Anthropic${C.reset} ${C.dim}(full tool use)${C.reset}`
     : process.env.BANKR_API_KEY
     ? `${C.green}Bankr${C.reset} ${C.dim}(full tool use)${C.reset}`
-    : `${C.yellow}Convex chat${C.reset} ${C.dim}(no tool execution — set ANTHROPIC_API_KEY for full mode)${C.reset}`;
+    : hasConvexAuth
+    ? `${C.green}Noelclaw${C.reset} ${C.dim}(full tool use via noelclaw.com)${C.reset}`
+    : `${C.yellow}No auth${C.reset} ${C.dim}(set NOELCLAW_SESSION_TOKEN for full tool use — noelclaw.com)${C.reset}`;
 
   console.log(`  ${C.dim}Mode:${C.reset} ${mode}\n`);
 

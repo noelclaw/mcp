@@ -84,8 +84,8 @@ export async function callConvex(path: string, method: string, body?: unknown, t
       };
       throw new Error(
         `🔑 ${b.message || "Authentication required"}\n\n` +
-        `→ Get your API key: ${b.url || "https://noelclaw.com"}\n\n` +
-        `Hint: ${b.hint || "Set NOELCLAW_API_KEY=noel_sk_xxx in your MCP config"}\n\n` +
+        `→ Sign in at: ${b.url || "https://noelclaw.com"}\n\n` +
+        `Hint: ${b.hint || 'Add NOELCLAW_SESSION_TOKEN=noel_... to the env block in your MCP config'}\n\n` +
         `${b.alternative ? `Alternative: ${b.alternative}` : ""}`
       );
     }

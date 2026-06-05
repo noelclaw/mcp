@@ -1,6 +1,6 @@
 import { ALL_TOOLS, HANDLER_MAP } from "./server.js";
-import { callLLM } from "./llm.js";
-import type { ChatMessage } from "./llm.js";
+import { callLLM, type ChatMessage } from "./llm.js";
+import { callConvex } from "./convex.js";
 
 const SYSTEM_PROMPT =
   "You are Noelclaw, a persistent AI with 76 tools covering memory, automations, DeFi execution, research, and code. " +
@@ -18,11 +18,14 @@ export async function runAgent(
 ): Promise<AgentResult> {
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const bankrKey = process.env.BANKR_API_KEY;
+  const hasConvexAuth = !!(process.env.NOELCLAW_SESSION_TOKEN || process.env.NOELCLAW_API_KEY);
 
   if (anthropicKey) return runAnthropicLoop(anthropicKey, userMessage, history, onToolCall);
   if (bankrKey) return runBankrLoop(bankrKey, userMessage, history, onToolCall);
+  // Session token → proxy Anthropic calls through Noelclaw backend (platform key, full tool use)
+  if (hasConvexAuth) return runConvexProxiedLoop(userMessage, history, onToolCall);
 
-  // Fallback — no direct tool execution, just LLM chat via Convex
+  // No auth at all — plain chat, no tool execution
   const text = await callLLM(SYSTEM_PROMPT, userMessage, 1024, history);
   return { text, toolCalls: [] };
 }
@@ -81,6 +84,68 @@ async function runAnthropicLoop(
     }
 
     // Execute all tool_use blocks
+    const toolResults: any[] = [];
+    for (const block of data.content as any[]) {
+      if (block.type !== "tool_use") continue;
+
+      onToolCall(block.name);
+      toolCalls.push({ name: block.name });
+
+      let resultText: string;
+      try {
+        const handler = HANDLER_MAP.get(block.name);
+        if (!handler) throw new Error(`Unknown tool: ${block.name}`);
+        const result = await handler(block.name, block.input ?? {});
+        resultText = result?.content?.[0]?.text ?? "Done.";
+      } catch (err: any) {
+        resultText = `Error: ${err.message}`;
+      }
+
+      toolResults.push({ type: "tool_result", tool_use_id: block.id, content: resultText });
+    }
+
+    messages.push({ role: "user", content: toolResults });
+  }
+
+  return { text: "Reached max tool iterations.", toolCalls };
+}
+
+// ── Convex-proxied Anthropic loop (session token only — platform covers LLM) ──
+
+async function runConvexProxiedLoop(
+  userMessage: string,
+  history: ChatMessage[],
+  onToolCall: (name: string) => void,
+): Promise<AgentResult> {
+  const model = process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5-20251001";
+  const tools = ALL_TOOLS.map(toAnthropicTool);
+  const toolCalls: Array<{ name: string }> = [];
+
+  const messages: any[] = [
+    ...history.map(h => ({ role: h.role, content: h.content })),
+    { role: "user", content: userMessage },
+  ];
+
+  for (let turn = 0; turn < 10; turn++) {
+    // callConvex handles session-token auth headers automatically
+    const data = await callConvex("/llm/complete", "POST", {
+      model,
+      max_tokens: 2048,
+      system: SYSTEM_PROMPT,
+      tools,
+      messages,
+    });
+
+    messages.push({ role: "assistant", content: data.content });
+
+    if (data.stop_reason !== "tool_use") {
+      const text = (data.content as any[])
+        .filter(b => b.type === "text")
+        .map(b => b.text)
+        .join("");
+      return { text, toolCalls };
+    }
+
     const toolResults: any[] = [];
     for (const block of data.content as any[]) {
       if (block.type !== "tool_use") continue;

@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/@noelclaw/mcp.svg)](https://www.npmjs.com/package/@noelclaw/mcp)
 
-74 MCP tools for your AI — persistent memory, DeFi execution on Base, multi-agent research, automations, and on-chain actions.
+76 MCP tools for your AI — persistent memory, DeFi execution on Base, multi-agent research, automations, and on-chain actions.
 
 No API key required to start. Ask your AI in plain English.
 
@@ -126,7 +126,7 @@ Three pillars: **Remember** · **Act** · **Know**
 
 Your AI loads your context before you type a single word.
 
-#### Vault — Structured Notes (15 tools)
+#### Vault — Structured Notes (12 tools)
 
 > Save research, decisions, and notes. Every entry is versioned and auto-tagged.
 
@@ -141,14 +141,12 @@ Your AI loads your context before you type a single word.
 | **Vault Export** `vault_export` | Export vault as JSON or markdown |
 | **Store Credential** `vault_store_credential` | Securely store an API key or secret |
 | **Get Credential** `vault_get_credential` | Retrieve a stored credential |
-| **Vault Publish** `vault_publish` | Publish an entry as a public note |
-| **Vault Explore** `vault_explore` | Browse by tag or category |
 | **Vault Pin** `vault_pin` | Pin an important entry to the top |
 | **Vault Delete** `vault_delete` | Delete an entry |
 | **Vault Link** `vault_link` | Link two entries together |
 | **Vault Tag** `vault_tag` | Add or update tags on an entry |
 
-#### Memory — Semantic Search (7 tools)
+#### Memory — Semantic Search (9 tools)
 
 > Find anything by meaning, not keywords. "What did I say about ETH yield?" just works.
 
@@ -161,6 +159,8 @@ Your AI loads your context before you type a single word.
 | **Memory List** `memory_list` | List recent memory entries |
 | **Memory Delete** `memory_delete` | Remove a memory entry |
 | **Memory Insight** `memory_insight` | AI-generated insights from your memory patterns |
+| **Memory Extract** `memory_extract` | Auto-extract discrete facts from any text and save each individually |
+| **Memory Consolidate** `memory_consolidate` | Merge overlapping memories on a topic into one clean summary |
 
 #### OS — Session Lifecycle (3 tools)
 
@@ -187,7 +187,7 @@ Tell it what to do. It runs — on schedule, on-chain, or right now.
 | **Automation Runs** `get_automation_runs` | Execution history |
 | **Run Now** `run_automation` | Trigger an automation manually |
 
-#### DeFi Execution (7 tools)
+#### DeFi Execution (6 tools)
 
 > Transactions are signed client-side — your private key never leaves your machine.
 
@@ -197,7 +197,6 @@ Tell it what to do. It runs — on schedule, on-chain, or right now.
 | **Estimate Swap** `estimate_swap` | Get a swap quote via 0x before executing |
 | **Swap Tokens** `swap_tokens` | Execute a token swap on Base |
 | **Send Token** `send_token` | Send ETH or ERC-20 to any address |
-| **Scan Wallet** `scan_wallet` | Analyze a wallet — holdings, activity, risk signals |
 | **Analyze Wallet** `analyze_wallet` | Deep wallet analysis with on-chain patterns |
 | **DeFi Yields** `get_defi_yields` | Find the best yield opportunities on Base |
 
@@ -217,18 +216,15 @@ Tell it what to do. It runs — on schedule, on-chain, or right now.
 | **Wallet Address** `get_wallet_address` | Get or generate your MCP wallet address |
 | **Set Telegram** `set_telegram` | Connect Telegram for automation notifications |
 
-#### Playbooks (6 tools)
+#### Playbooks (3 tools)
 
 > Reusable sequences with safety rules applied before any action runs.
 
 | Name | Description |
 |------|-------------|
-| **Create Task** `create_task_packet` | Convert intent into a structured task with constraints |
-| **List Tasks** `list_task_packets` | List all task packets |
 | **List Playbooks** `list_playbooks` | Browse available playbooks |
 | **Run Playbook** `run_playbook` | Execute a playbook by ID |
 | **Noel Ledger** `get_noel_ledger` | Credits and full audit trail |
-| **Sentinel Rules** `get_sentinel_rules` | View safety rules applied before actions |
 
 ---
 
@@ -263,7 +259,7 @@ Always informed before you act.
 | **Market Thesis** `market_thesis` | Investment thesis for any token or sector |
 | **Trade Plan** `trade_plan` | Structured trade plan with entry, exit, and risk levels |
 
-#### Agent Network (15 tools)
+#### Agent Network (8 tools)
 
 > Spin up multiple AI agents that research and monitor in parallel.
 
@@ -272,16 +268,9 @@ Always informed before you act.
 | **Start Swarm** `start_swarm` | Start the agent network |
 | **Stop Swarm** `stop_swarm` | Stop the active swarm |
 | **Swarm Status** `get_swarm_status` | Status and shared memory snapshot |
-| **Trigger Agent** `trigger_agent` | Run a specific agent now |
-| **Write Memory** `write_swarm_memory` | Write to shared agent memory |
-| **Read Memory** `get_swarm_memory` | Read from shared agent memory |
-| **Execution Scores** `get_execution_scores` | Performance scores across all agents |
 | **Swarm Research** `swarm_research` | Multi-agent research on any topic — saves to vault |
+| **Trigger Agent** `trigger_agent` | Run a specific agent now |
 | **Swarm Brief** `swarm_brief` | Summary of everything the swarm has found |
-| **Broadcast** `swarm_broadcast` | Send a message to all active agents |
-| **Swarm Pulse** `swarm_pulse` | Heartbeat — active agents and last activity |
-| **Swarm Reflect** `swarm_reflect` | Agents self-evaluate what went well |
-| **Swarm Watch** `swarm_watch` | Watch a token or topic for changes |
 | **List Agents** `list_agents` | Browse available specialist agents |
 | **Hire Agent** `hire_agent` | Hire an agent for a specific task |
 
@@ -289,17 +278,15 @@ Always informed before you act.
 
 ### 🛠 BUILD — Developer & Content Tools
 
-#### Coder (7 tools)
+#### Coder (5 tools)
 
 | Name | Description |
 |------|-------------|
-| **Scaffold Project** `scaffold_project` | Scaffold a DeFi or Web3 project |
-| **Generate Component** `generate_component` | React component with wagmi/viem |
 | **Generate Contract** `generate_contract` | Solidity smart contract |
 | **Audit Contract** `audit_contract` | Contract vulnerability audit |
 | **Explain Code** `explain_code` | Explain any code in plain English |
-| **Generate MCP Skill** `generate_mcp_skill` | Generate a new MCP tool from plain English |
 | **Review Code** `review_code` | Code review with actionable feedback |
+| **Generate MCP Skill** `generate_mcp_skill` | Generate a new MCP tool from plain English |
 
 #### Content & Humanizer (3 tools)
 
@@ -321,9 +308,7 @@ Always informed before you act.
 
 ## Configuration
 
-No config required to start — all tools work out of the box via the Noelclaw backend.
-
-For additional capabilities, add to the `env` block in your MCP config:
+All tools work out of the box. For the best experience, add your session token:
 
 ```json
 {
@@ -332,20 +317,21 @@ For additional capabilities, add to the `env` block in your MCP config:
       "command": "npx",
       "args": ["-y", "@noelclaw/mcp"],
       "env": {
-        "NOELCLAW_API_KEY": "noel_sk_...",
-        "ANTHROPIC_API_KEY": "sk-ant-..."
+        "NOELCLAW_SESSION_TOKEN": "noel_..."
       }
     }
   }
 }
 ```
 
+Get your session token at [noelclaw.com](https://noelclaw.com) — it's the only credential you need. With it, the CLI (`npx noelclaw`) gets full tool use through the Noelclaw backend without requiring your own Anthropic key.
+
 | Variable | Purpose |
 |----------|---------|
-| `NOELCLAW_API_KEY` | Unlocks swarm, automation, framework, and agent tools. Get one at [app.noelclaw.com](https://app.noelclaw.com) |
-| `ANTHROPIC_API_KEY` | AI tools use your Claude quota — you pay, not the server |
-| `NOELCLAW_SESSION_TOKEN` | Session token from app.noelclaw.com (alternative to API key) |
-| `NOELCLAW_CONVEX_URL` | Override the backend URL (for self-hosted deployments) |
+| `NOELCLAW_SESSION_TOKEN` | **Recommended.** Unlocks all tools + full agent mode. Get one at [noelclaw.com](https://noelclaw.com) |
+| `ANTHROPIC_API_KEY` | Use your own Claude quota instead of the platform key |
+| `BANKR_API_KEY` | Use Bankr/Grok instead of Anthropic |
+| `NOELCLAW_CONVEX_URL` | Override backend URL (self-hosted deployments only) |
 
 ---
 

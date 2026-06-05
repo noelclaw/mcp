@@ -39,19 +39,20 @@ async function main() {
   const categories = [
     { label: "Market",     count: 5,  tools: "get_market_data · get_token_data · compare_tokens · market_overview · token_history" },
     { label: "Insight",    count: 3,  tools: "ask_noel · market_thesis · trade_plan" },
-    { label: "DeFi",       count: 6,  tools: "portfolio · swap · send · scan_wallet · estimate · get_defi_yields" },
-    { label: "Automation", count: 5,  tools: "create · list · pause · delete · runs" },
+    { label: "DeFi",       count: 6,  tools: "get_portfolio · estimate_swap · swap_tokens · send_token · analyze_wallet · get_defi_yields" },
+    { label: "Automation", count: 6,  tools: "create · list · pause · delete · runs · run_now" },
+    { label: "Swarm",      count: 6,  tools: "start_swarm · stop_swarm · get_swarm_status · swarm_research · trigger_agent · swarm_brief" },
+    { label: "Framework",  count: 3,  tools: "list_playbooks · run_playbook · get_noel_ledger" },
+    { label: "Vault",      count: 12, tools: "save · read · list · search · history · diff · export · credential · pin · delete · link · tag" },
+    { label: "Wallet",     count: 2,  tools: "get_wallet_address · set_telegram" },
+    { label: "MiroShark",  count: 3,  tools: "simulate · status · stop" },
     { label: "Scanner",    count: 4,  tools: "scan_dips · scan_momentum · score_token · check_token" },
     { label: "Agents",     count: 2,  tools: "list_agents · hire_agent" },
-    { label: "Swarm",      count: 11, tools: "start · stop · status · memory · scores · research · trigger · brief · broadcast · pulse" },
-    { label: "Framework",  count: 6,  tools: "create_task · list_tasks · list_playbooks · run_playbook · ledger · sentinel" },
-    { label: "Vault",      count: 18, tools: "save · read · list · search · history · diff · export · remember · context · credential · publish · explore · connect · pin · delete · link · tag" },
-    { label: "Memory",     count: 8,  tools: "add · search · context · profile · connect · list · delete · update" },
-    { label: "MiroShark",  count: 3,  tools: "simulate · status · stop" },
-    { label: "Wallet",     count: 2,  tools: "get_wallet_address · set_telegram" },
     { label: "Social",     count: 3,  tools: "humanize_text · write_thread · write_post" },
-    { label: "Coder",      count: 7,  tools: "scaffold_project · generate_component · generate_contract · audit_contract · explain_code · review_code · generate_mcp_skill" },
+    { label: "Coder",      count: 5,  tools: "generate_contract · audit_contract · explain_code · review_code · generate_mcp_skill" },
     { label: "Base",       count: 4,  tools: "query_vaults · list_markets · prepare_deposit · chain_stats" },
+    { label: "Memory",     count: 9,  tools: "add · search · context · profile · list · delete · insight · extract · consolidate" },
+    { label: "OS",         count: 3,  tools: "noel_boot · noel_status · noel_shutdown" },
   ];
 
   const total = ALL_TOOLS.length;
@@ -59,9 +60,17 @@ async function main() {
   divider();
   process.stderr.write(`\n`);
 
-  line("version", `v2.4.0  ${C.dim}MCP protocol 2.1.0${C.reset}`);
+  const aiMode = process.env.ANTHROPIC_API_KEY
+    ? `Anthropic  ${C.dim}claude-haiku${C.reset}`
+    : process.env.BANKR_API_KEY
+    ? `Bankr  ${C.dim}grok-3${C.reset}`
+    : (process.env.NOELCLAW_SESSION_TOKEN || process.env.NOELCLAW_API_KEY)
+    ? `Noelclaw  ${C.dim}proxy (platform key)${C.reset}`
+    : `${C.yellow}no LLM${C.reset}  ${C.dim}set NOELCLAW_SESSION_TOKEN${C.reset}`;
+
+  line("version", `v3.2.1  ${C.dim}MCP protocol 2.1.0${C.reset}`);
   line("network",  `Base mainnet  ${C.dim}via 0x Protocol · ethers v6${C.reset}`);
-  line("ai",       `Bankr LLM  ${C.dim}grok-3 · llm.bankr.bot${C.reset}`);
+  line("ai",       aiMode);
   line("tools",    `${C.white}${C.bold}${total} tools loaded${C.reset}  ${C.dim}across ${categories.length} categories${C.reset}`);
 
   process.stderr.write(`\n`);
