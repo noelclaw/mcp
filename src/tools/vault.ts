@@ -19,7 +19,7 @@ export const VAULT_TOOLS: Tool[] = [
       type: "object",
       properties: {
         type: { type: "string", enum: [...VAULT_TYPES], description: "Entry type" },
-        title: { type: "string", description: "Human-readable title" },
+        title: { type: "string", description: "Human-readable title (auto-generated from content if omitted)" },
         content: { type: "string", description: "Main content — markdown, JSON, code, or plain text" },
         key: { type: "string", description: "Optional slug key e.g. 'research/btc-dominance-analysis'. Auto-generated if omitted." },
         contentType: { type: "string", enum: ["markdown", "json", "text", "code"], description: "Content format hint" },
@@ -28,7 +28,7 @@ export const VAULT_TOOLS: Tool[] = [
         commitMsg: { type: "string", description: "Commit message for this version, e.g. 'initial research', 'refined with on-chain data'" },
         metadata: { type: "string", description: "Optional JSON string for extra structured fields" },
       },
-      required: ["type", "title", "content"],
+      required: ["type", "content"],
     },
   },
   {
@@ -193,7 +193,7 @@ export const VAULT_TOOLS: Tool[] = [
 
 const SaveSchema = z.object({
   type: z.enum(VAULT_TYPES),
-  title: z.string().min(1),
+  title: z.string().optional(),
   content: z.string().min(1),
   key: z.string().optional(),
   contentType: z.enum(["markdown", "json", "text", "code"]).optional(),
@@ -244,15 +244,20 @@ export async function handleVaultTool(name: string, args: unknown): Promise<Tool
     case "vault_save": {
       const parsed = SaveSchema.safeParse(args);
       if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
-      const data = await callConvex("/vault/save", "POST", parsed.data, "vault_save");
+
+      // Auto-generate title from content if not provided
+      const autoTitle = parsed.data.title ?? parsed.data.content.split("\n")[0].replace(/^#+\s*/, "").slice(0, 80) || `${parsed.data.type} — ${new Date().toISOString().slice(0, 10)}`;
+      const savePayload = { ...parsed.data, title: autoTitle };
+
+      const data = await callConvex("/vault/save", "POST", savePayload, "vault_save");
       if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
       const { key, version, changed } = data;
 
       // Mirror to semantic memory (fire-and-forget)
-      if (parsed.data.type !== "credential") {
-        syncToSupermemory(parsed.data.content, {
-          vaultKey: key, title: parsed.data.title, type: parsed.data.type,
-          tags: parsed.data.tags, version, source: "vault_save",
+      if (savePayload.type !== "credential") {
+        syncToSupermemory(savePayload.content, {
+          vaultKey: key, title: autoTitle, type: savePayload.type,
+          tags: savePayload.tags, version, source: "vault_save",
         });
       }
 

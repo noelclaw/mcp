@@ -107,10 +107,9 @@ const TriggerAgentSchema = z.object({
   params: z.record(z.string(), z.any()).optional(),
 });
 const NO_KEY_MSG =
-  `🔑 Swarm tools require a NoelClaw API key.\n\n` +
-  `→ Get yours free at: https://noelclaw.com\n\n` +
-  `Then add it to your MCP config:\n` +
-  `  "env": { "NOELCLAW_API_KEY": "noel_sk_..." }`;
+  `⚠️ Swarm auth failed.\n\n` +
+  `Your local wallet auto-generates on first use at ~/.noelclaw/wallet.json — no API key needed.\n\n` +
+  `Try restarting your MCP client. If the error persists, run \`get_wallet_address\` to confirm the wallet is initialised.`;
 
 function swarmAuthError(err: unknown): ToolResult {
   const msg = err instanceof Error ? err.message : String(err);
@@ -231,7 +230,7 @@ export async function handleSwarmTool(name: string, args: unknown): Promise<Tool
             ``,
             data.message ?? "Research triggered. Findings will appear in vault automatically.",
             ``,
-            `**Next:** \`swarm_reflect focus: "${topic}"\` to consolidate findings`,
+            `**Next:** \`memory_consolidate topic: "${topic}"\` to merge findings into one summary`,
             `Or: \`memory_insight topic: "${topic}"\` to see full intelligence report`,
           ].join("\n"),
         }],
@@ -267,7 +266,7 @@ export async function handleSwarmTool(name: string, args: unknown): Promise<Tool
             resultText,
             ``,
             `Findings saved to vault automatically.`,
-            `Use \`swarm_reflect\` to consolidate or \`memory_insight topic: "${contextQuery.split(" ")[1] ?? agentId}"\` for full report.`,
+            `Use \`memory_consolidate topic: "${contextQuery.split(" ")[1] ?? agentId}"\` to merge findings, or \`memory_insight\` for full report.`,
           ].filter(Boolean).join("\n"),
         }],
       };
@@ -282,9 +281,8 @@ export async function handleSwarmTool(name: string, args: unknown): Promise<Tool
       try { data = await callConvex(`/vault/list?${params}`, "GET", undefined, "swarm_brief"); } catch (err) { return swarmAuthError(err); }
       if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
 
-      const entries: any[] = (data.entries ?? []).filter((e: any) =>
-        e.agentId === "market-monitor" || e.agentId === "sentiment-tracker"
-      );
+      const SWARM_AGENTS = new Set(["market-monitor", "sentiment-tracker", "onchain-analyst", "news-aggregator", "risk-verifier", "memory-manager", "workflow-executor"]);
+      const entries: any[] = (data.entries ?? []).filter((e: any) => e.agentId && SWARM_AGENTS.has(e.agentId));
 
       if (!entries.length) {
         return { content: [{ type: "text", text: `No swarm research in vault yet.\nStart the swarm with \`start_swarm\` or run \`swarm_research topic: "BTC"\` to build your knowledge base.` }] };
