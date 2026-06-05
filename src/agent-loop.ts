@@ -18,16 +18,19 @@ export async function runAgent(
 ): Promise<AgentResult> {
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const bankrKey = process.env.BANKR_API_KEY;
-  const hasConvexAuth = !!(process.env.NOELCLAW_SESSION_TOKEN || process.env.NOELCLAW_API_KEY);
 
   if (anthropicKey) return runAnthropicLoop(anthropicKey, userMessage, history, onToolCall);
   if (bankrKey) return runBankrLoop(bankrKey, userMessage, history, onToolCall);
-  // Session token → proxy Anthropic calls through Noelclaw backend (platform key, full tool use)
-  if (hasConvexAuth) return runConvexProxiedLoop(userMessage, history, onToolCall);
 
-  // No auth at all — plain chat, no tool execution
-  const text = await callLLM(SYSTEM_PROMPT, userMessage, 1024, history);
-  return { text, toolCalls: [] };
+  // No direct key — proxy through Noelclaw backend. Wallet auto-creates at ~/.noelclaw/wallet.json
+  // on first use and signs requests transparently. No account or config needed.
+  try {
+    return await runConvexProxiedLoop(userMessage, history, onToolCall);
+  } catch {
+    // Network down or backend unavailable — plain chat fallback
+    const text = await callLLM(SYSTEM_PROMPT, userMessage, 1024, history);
+    return { text, toolCalls: [] };
+  }
 }
 
 // ── Anthropic agent loop ─────────────────────────────────────────────────────
@@ -127,14 +130,14 @@ async function runConvexProxiedLoop(
   ];
 
   for (let turn = 0; turn < 10; turn++) {
-    // callConvex handles session-token auth headers automatically
+    // callConvex handles wallet/session auth automatically; 90s timeout matches the proxy endpoint
     const data = await callConvex("/llm/complete", "POST", {
       model,
       max_tokens: 2048,
       system: SYSTEM_PROMPT,
       tools,
       messages,
-    });
+    }, "llm_complete", 90_000);
 
     messages.push({ role: "assistant", content: data.content });
 

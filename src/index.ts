@@ -64,9 +64,7 @@ async function main() {
     ? `Anthropic  ${C.dim}claude-haiku${C.reset}`
     : process.env.BANKR_API_KEY
     ? `Bankr  ${C.dim}grok-3${C.reset}`
-    : (process.env.NOELCLAW_SESSION_TOKEN || process.env.NOELCLAW_API_KEY)
-    ? `Noelclaw  ${C.dim}proxy (platform key)${C.reset}`
-    : `${C.yellow}no LLM${C.reset}  ${C.dim}set NOELCLAW_SESSION_TOKEN${C.reset}`;
+    : `Noelclaw  ${C.dim}proxy · auto-wallet${C.reset}`;
 
   line("version", `v3.2.1  ${C.dim}MCP protocol 2.1.0${C.reset}`);
   line("network",  `Base mainnet  ${C.dim}via 0x Protocol · ethers v6${C.reset}`);

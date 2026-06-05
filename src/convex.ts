@@ -17,16 +17,16 @@ export function buildPaymentHeader(txHash: string, requestId: string): string {
   return Buffer.from(`${txHash}:${requestId}`).toString("base64");
 }
 
-async function attemptConvex(url: string, method: string, headers: Record<string, string>, body?: unknown): Promise<Response> {
+async function attemptConvex(url: string, method: string, headers: Record<string, string>, body?: unknown, timeoutMs = 30_000): Promise<Response> {
   return fetch(url, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(30000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
 }
 
-export async function callConvex(path: string, method: string, body?: unknown, toolName = "unknown"): Promise<any> {
+export async function callConvex(path: string, method: string, body?: unknown, toolName = "unknown", timeoutMs = 30_000): Promise<any> {
   const url = `${CONVEX_SITE}${path}`;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
 
@@ -67,7 +67,7 @@ export async function callConvex(path: string, method: string, body?: unknown, t
     }
     let res: Response;
     try {
-      res = await attemptConvex(url, method, headers, body);
+      res = await attemptConvex(url, method, headers, body, timeoutMs);
     } catch (err: any) {
       lastError = err;
       continue;
