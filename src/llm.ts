@@ -109,7 +109,7 @@ async function callBankr(
   history: ChatMessage[],
   timeoutMs: number,
 ): Promise<string> {
-  const model = process.env.BANKR_MODEL ?? "grok-3";
+  const model = process.env.BANKR_MODEL ?? "claude-haiku-4.5";
 
   const res = await fetch(BANKR_URL, {
     method: "POST",

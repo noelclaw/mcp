@@ -191,7 +191,7 @@ export async function handleInsightTool(name: string, args: unknown): Promise<To
         agentId: "noel",
         tags: ["thesis", token.toLowerCase()],
         commitMsg: "market_thesis auto-save",
-      }, "market_thesis").catch(() => {});
+      }, "vault_save").catch(() => {});
       return { content: [{ type: "text", text: answer }] };
     } catch (err: any) {
       return { content: [{ type: "text", text: `market_thesis error: ${err.message}` }], isError: true };
@@ -266,7 +266,7 @@ export async function handleInsightTool(name: string, args: unknown): Promise<To
         agentId: "noel",
         tags: ["trade-plan", token.toLowerCase(), side],
         commitMsg: "trade_plan auto-save",
-      }, "trade_plan").catch(() => {});
+      }, "vault_save").catch(() => {});
       return { content: [{ type: "text", text: answer }] };
     } catch (err: any) {
       return { content: [{ type: "text", text: `trade_plan error: ${err.message}` }], isError: true };

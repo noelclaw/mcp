@@ -73,9 +73,9 @@ function noKeyMsg(): ToolResult {
         ``,
         `To enable autonomous monitors:`,
         `1. Sign up at trigger.dev (free tier available)`,
-        `2. Create a project and copy your Secret Key`,
-        `3. Add to your MCP config: \`"env": { "TRIGGER_SECRET_KEY": "tr_..." }\``,
-        `4. Deploy the Noelclaw worker: \`npx @noelclaw/worker deploy\``,
+        `2. Create a project, go to API Keys → copy your Secret Key`,
+        `3. Add to your MCP config env block: \`"TRIGGER_SECRET_KEY": "tr_prod_..."\``,
+        `4. In the noelclaw worker directory, run: \`npx trigger.dev@latest deploy\``,
         ``,
         `Then monitors will run autonomously — no chat needed.`,
       ].join("\n"),
@@ -174,12 +174,30 @@ export async function handleMonitorTool(name: string, args: unknown): Promise<To
         };
       }
 
+      // Load topic labels from vault for each schedule
+      const configMap = new Map<string, { topic: string; label: string }>();
+      await Promise.allSettled(
+        schedules
+          .filter(s => s.externalId)
+          .map(async s => {
+            try {
+              const cfg = await callConvex(`/vault/read?key=monitor-config/${s.externalId}`, "GET", undefined, "vault_read");
+              if (cfg?.content) {
+                const parsed = JSON.parse(cfg.content);
+                configMap.set(s.externalId, { topic: parsed.topic, label: parsed.label ?? parsed.topic });
+              }
+            } catch { /* skip — show raw externalId */ }
+          })
+      );
+
       const lines = [`📋 **Active Monitors** — ${schedules.length} running\n`];
       for (const s of schedules) {
-        const topic = s.metadata?.topic ?? s.externalId ?? "unknown";
+        const cfg = s.externalId ? configMap.get(s.externalId) : undefined;
+        const label = cfg?.label ?? s.externalId ?? s.id;
+        const topic = cfg?.topic ? ` — ${cfg.topic}` : "";
         const next = s.nextRun ? new Date(s.nextRun).toUTCString() : "unknown";
-        lines.push(`**${topic}**`);
-        lines.push(`  ID: ${s.id} · Cron: \`${s.cron}\` · Next: ${next}`);
+        lines.push(`**${label}**${topic}`);
+        lines.push(`  ID: \`${s.id}\` · Cron: \`${s.cron}\` · Next: ${next}`);
         lines.push("");
       }
       lines.push(`Use \`cancel_monitor id: "<id>"\` to stop a monitor.`);
