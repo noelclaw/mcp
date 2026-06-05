@@ -110,7 +110,7 @@ export async function handleOsTool(name: string, args: unknown): Promise<ToolRes
 
       lines.push(
         swarmActive
-          ? `💡 Run \`swarm_pulse\` for a live snapshot from all agents.`
+          ? `💡 Run \`get_swarm_status\` for a live snapshot from all agents.`
           : `💡 Run \`noel_boot\` to wake up the full system.`
       );
 
@@ -191,7 +191,7 @@ export async function handleOsTool(name: string, args: unknown): Promise<ToolRes
       }
 
       lines.push(`**Quick actions:**`);
-      lines.push(`  • \`swarm_pulse\` — live readings from all agents`);
+      lines.push(`  • \`get_swarm_status\` — live readings from all agents`);
       if (focus) {
         lines.push(`  • \`swarm_research topic: "${focus}"\` — deep research session`);
         lines.push(`  • \`memory_insight topic: "${focus}"\` — full intelligence report`);

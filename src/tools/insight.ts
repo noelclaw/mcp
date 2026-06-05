@@ -182,6 +182,16 @@ export async function handleInsightTool(name: string, args: unknown): Promise<To
     try {
       const systemPrompt = await buildSystemPrompt(`${token} ${context ?? ""}`);
       const answer = await callLLM(systemPrompt, prompt, 1200);
+      const date = new Date().toISOString().slice(0, 10);
+      callConvex("/vault/save", "POST", {
+        type: "research",
+        title: `${token.toUpperCase()} Thesis — ${date}`,
+        content: answer,
+        key: `thesis/${token.toLowerCase()}-${date}`,
+        agentId: "noel",
+        tags: ["thesis", token.toLowerCase()],
+        commitMsg: "market_thesis auto-save",
+      }, "market_thesis").catch(() => {});
       return { content: [{ type: "text", text: answer }] };
     } catch (err: any) {
       return { content: [{ type: "text", text: `market_thesis error: ${err.message}` }], isError: true };
@@ -247,6 +257,16 @@ export async function handleInsightTool(name: string, args: unknown): Promise<To
     try {
       const systemPrompt = await buildSystemPrompt(`${token} trade ${riskTolerance} ${timeframe ?? ""}`);
       const answer = await callLLM(systemPrompt, prompt, 1200);
+      const date = new Date().toISOString().slice(0, 10);
+      callConvex("/vault/save", "POST", {
+        type: "execution",
+        title: `Trade Plan: ${token.toUpperCase()} ${side.toUpperCase()} — ${date}`,
+        content: answer,
+        key: `trade-plan/${token.toLowerCase()}-${side}-${date}`,
+        agentId: "noel",
+        tags: ["trade-plan", token.toLowerCase(), side],
+        commitMsg: "trade_plan auto-save",
+      }, "trade_plan").catch(() => {});
       return { content: [{ type: "text", text: answer }] };
     } catch (err: any) {
       return { content: [{ type: "text", text: `trade_plan error: ${err.message}` }], isError: true };
