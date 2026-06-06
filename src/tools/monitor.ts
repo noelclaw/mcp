@@ -117,15 +117,20 @@ export async function handleMonitorTool(name: string, args: unknown): Promise<To
       const scheduleId: string = data.id ?? externalId;
 
       // Save config to vault so the worker can retrieve topic + metadata
-      callConvex("/vault/save", "POST", {
-        type: "config",
-        title: `Monitor: ${label ?? topic}`,
-        content: JSON.stringify({ topic, label: label ?? topic, cron, scheduleId, externalId }),
-        key: `monitor-config/${externalId}`,
-        agentId: "os",
-        tags: ["monitor-config"],
-        commitMsg: "create_monitor config",
-      }, "create_monitor").catch(() => {});
+      let configSaved = true;
+      try {
+        await callConvex("/vault/save", "POST", {
+          type: "config",
+          title: `Monitor: ${label ?? topic}`,
+          content: JSON.stringify({ topic, label: label ?? topic, cron, scheduleId, externalId }),
+          key: `monitor-config/${externalId}`,
+          agentId: "os",
+          tags: ["monitor-config"],
+          commitMsg: "create_monitor config",
+        }, "vault_save");
+      } catch {
+        configSaved = false;
+      }
 
       return {
         content: [{
@@ -138,7 +143,9 @@ export async function handleMonitorTool(name: string, args: unknown): Promise<To
             `🆔 ID:       ${scheduleId}`,
             data.nextRun ? `⏭️ Next run: ${new Date(data.nextRun).toUTCString()}` : "",
             ``,
-            `The agent will research "${topic}" on schedule, save findings to vault, and send a Telegram notification if configured.`,
+            configSaved
+              ? `The agent will research "${topic}" on schedule, save findings to vault, and send a Telegram notification if configured.`
+              : `⚠️ Monitor schedule created but config save failed — the agent may use a default topic on first run. Try \`cancel_monitor\` and recreate.`,
             `Use \`list_monitors\` to see all active monitors.`,
           ].filter(Boolean).join("\n"),
         }],
