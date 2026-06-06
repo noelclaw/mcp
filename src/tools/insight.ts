@@ -193,7 +193,7 @@ export async function handleInsightTool(name: string, args: unknown): Promise<To
         commitMsg: "market_thesis auto-save",
       }, "vault_save").catch(() => {});
       const suggest = process.env.TRIGGER_SECRET_KEY
-        ? `\n\n---\n💡 *Tip:* Use \`create_monitor\` to automatically track "${token.toUpperCase()}" on a schedule — daily briefings, saved to vault, Telegram alerts.`
+        ? `\n\n---\n💡 Want to stay on top of this? Use \`create_monitor\` to get automatic research briefings on ${token.toUpperCase()} delivered on a schedule — no prompting needed.`
         : "";
       return { content: [{ type: "text", text: answer + suggest }] };
     } catch (err: any) {
@@ -271,7 +271,7 @@ export async function handleInsightTool(name: string, args: unknown): Promise<To
         commitMsg: "trade_plan auto-save",
       }, "vault_save").catch(() => {});
       const suggest = process.env.TRIGGER_SECRET_KEY
-        ? `\n\n---\n💡 *Tip:* Use \`create_monitor\` to automatically track "${token.toUpperCase()}" on a schedule — daily briefings, saved to vault, Telegram alerts.`
+        ? `\n\n---\n💡 Want to stay on top of this? Use \`create_monitor\` to get automatic research briefings on ${token.toUpperCase()} delivered on a schedule — no prompting needed.`
         : "";
       return { content: [{ type: "text", text: answer + suggest }] };
     } catch (err: any) {
