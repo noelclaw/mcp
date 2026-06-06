@@ -63,13 +63,12 @@ async function main() {
   process.stderr.write(`\n`);
 
   const aiMode = process.env.ANTHROPIC_API_KEY
-    ? `Anthropic  ${C.dim}claude-haiku${C.reset}`
+    ? `Anthropic  ${C.dim}claude-haiku-4.5${C.reset}`
     : process.env.BANKR_API_KEY
-    ? `Bankr  ${C.dim}grok-3${C.reset}`
-    : `Noelclaw  ${C.dim}proxy · auto-wallet${C.reset}`;
+    ? `Bankr  ${C.dim}claude-haiku-4.5${C.reset}`
+    : `Noelclaw  ${C.dim}proxy · auto-auth${C.reset}`;
 
   line("version", `v3.3.0  ${C.dim}MCP protocol 2.1.0${C.reset}`);
-  line("network",  `Base mainnet  ${C.dim}via 0x Protocol · ethers v6${C.reset}`);
   line("ai",       aiMode);
   line("tools",    `${C.white}${C.bold}${total} tools loaded${C.reset}  ${C.dim}across ${categories.length} categories${C.reset}`);
 
