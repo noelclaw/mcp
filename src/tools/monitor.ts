@@ -120,7 +120,7 @@ export async function handleMonitorTool(name: string, args: unknown): Promise<To
       let configSaved = true;
       try {
         await callConvex("/vault/save", "POST", {
-          type: "config",
+          type: "workflow",
           title: `Monitor: ${label ?? topic}`,
           content: JSON.stringify({ topic, label: label ?? topic, cron, scheduleId, externalId }),
           key: `monitor-config/${externalId}`,
@@ -170,7 +170,7 @@ export async function handleMonitorTool(name: string, args: unknown): Promise<To
       }
 
       const data = await res.json() as any;
-      const schedules: any[] = (data.data ?? []).filter((s: any) => s.taskIdentifier === MONITOR_TASK_ID);
+      const schedules: any[] = (data.data ?? []).filter((s: any) => (s.task ?? s.taskIdentifier) === MONITOR_TASK_ID);
 
       if (!schedules.length) {
         return {
