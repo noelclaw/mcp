@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/@noelclaw/mcp.svg)](https://www.npmjs.com/package/@noelclaw/mcp)
 
-76 MCP tools for your AI — persistent memory, DeFi execution on Base, multi-agent research, automations, and on-chain actions.
+81 MCP tools for your AI — persistent memory, autonomous research monitors, live web search, DeFi execution on Base, multi-agent swarms, and on-chain actions.
 
 No API key required to start. Ask your AI in plain English.
 
@@ -21,37 +21,7 @@ npx -y @noelclaw/mcp
 
 ### Claude Code
 ```bash
-claude mcp add noelclaw -- npx -y @noelclaw/mcp
-```
-
-### Aeon
-
-Open **Settings → MCP Servers** and add:
-
-```json
-{
-  "mcpServers": {
-    "noelclaw": {
-      "command": "npx",
-      "args": ["-y", "@noelclaw/mcp"]
-    }
-  }
-}
-```
-
-### Hermes
-
-Open **Settings → MCP Servers** and add:
-
-```json
-{
-  "mcpServers": {
-    "noelclaw": {
-      "command": "npx",
-      "args": ["-y", "@noelclaw/mcp"]
-    }
-  }
-}
+claude mcp add noelclaw -s user -- npx -y @noelclaw/mcp
 ```
 
 ### Claude Desktop
@@ -69,7 +39,7 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/Library/App
 }
 ```
 
-### Any Other MCP Client
+### Aeon / Hermes / Cursor / Windsurf
 
 ```json
 {
@@ -91,27 +61,24 @@ Restart your client. Tools load automatically.
 Ask your AI anything — it routes to the right tool automatically.
 
 ```
-what's the ETH gas price and latest block on Base?
+search for AI agent news today
+→ Returns top results from across the web, summarized
+
+set up a daily monitor for AI agents news
+→ ✓ monitor created · runs daily at 8am · findings saved to vault + Telegram
+
+what's the ETH gas price on Base right now?
 → Gas: 0.006 gwei · Block: 46,773,463 · ETH: $1,991
 
 show me the best yield vaults on Base right now
 → Clearstar USDC Reactor: 7.57% APY ($2.6M TVL)
 → Moonwell Flagship USDC: 4.63% APY ($9.1M TVL)
 
-remember my Aerodrome thesis for next time
-→ ✓ saved to Vault · auto-loaded every session
-
-set up weekly $100 ETH DCA every Monday
-→ ✓ automation created · runs weekly 09:00 UTC
+give me a bull vs bear thesis on ETH
+→ Full analysis · auto-saved to vault
 
 swap 0.5 ETH to USDC on Base
 → ✓ swapped → 1,842 USDC · tx confirmed in 2s
-
-swarm research topic: "ETH vs SOL which wins 2025"
-→ Triggers multi-agent research, saves findings to your vault
-
-generate a Solidity ERC-20 with burn and pause features
-→ Returns production-ready OpenZeppelin contract
 ```
 
 ---
@@ -143,7 +110,6 @@ Your AI loads your context before you type a single word.
 | **Get Credential** `vault_get_credential` | Retrieve a stored credential |
 | **Vault Pin** `vault_pin` | Pin an important entry to the top |
 | **Vault Delete** `vault_delete` | Delete an entry |
-| **Vault Link** `vault_link` | Link two entries together |
 | **Vault Tag** `vault_tag` | Add or update tags on an entry |
 
 #### Memory — Semantic Search (9 tools)
@@ -175,6 +141,16 @@ Your AI loads your context before you type a single word.
 ### ⚡ ACT — Execute & Automate
 
 Tell it what to do. It runs — on schedule, on-chain, or right now.
+
+#### Autonomous Monitor (3 tools)
+
+> Runs research on a schedule with no prompting needed.
+
+| Name | Description |
+|------|-------------|
+| **Create Monitor** `create_monitor` | Schedule a recurring research agent for any topic |
+| **List Monitors** `list_monitors` | View all active monitors with schedule and next run |
+| **Cancel Monitor** `cancel_monitor` | Stop a monitor by ID |
 
 #### Automations (6 tools)
 
@@ -214,7 +190,7 @@ Tell it what to do. It runs — on schedule, on-chain, or right now.
 | Name | Description |
 |------|-------------|
 | **Wallet Address** `get_wallet_address` | Get or generate your MCP wallet address |
-| **Set Telegram** `set_telegram` | Connect Telegram for automation notifications |
+| **Set Telegram** `set_telegram` | Connect Telegram for monitor and automation notifications |
 
 #### Playbooks (3 tools)
 
@@ -224,13 +200,20 @@ Tell it what to do. It runs — on schedule, on-chain, or right now.
 |------|-------------|
 | **List Playbooks** `list_playbooks` | Browse available playbooks |
 | **Run Playbook** `run_playbook` | Execute a playbook by ID |
-| **Noel Ledger** `get_noel_ledger` | Credits and full audit trail |
+| **Noel Ledger** `get_noel_ledger` | Audit trail of all agent actions |
 
 ---
 
 ### 🔍 KNOW — Research & Intelligence
 
 Always informed before you act.
+
+#### Web Research (2 tools)
+
+| Name | Description |
+|------|-------------|
+| **Web Search** `web_search` | Search the web in real time for any topic |
+| **Web Scrape** `web_scrape` | Read the full content of any URL |
 
 #### Market & Prices (5 tools)
 
@@ -256,8 +239,8 @@ Always informed before you act.
 | Name | Description |
 |------|-------------|
 | **Ask Noel** `ask_noel` | AI crypto analyst — opinions, trade ideas, market outlook |
-| **Market Thesis** `market_thesis` | Investment thesis for any token or sector |
-| **Trade Plan** `trade_plan` | Structured trade plan with entry, exit, and risk levels |
+| **Market Thesis** `market_thesis` | Investment thesis for any token or sector — auto-saved to vault |
+| **Trade Plan** `trade_plan` | Structured trade plan with entry, exit, and risk levels — auto-saved to vault |
 
 #### Agent Network (8 tools)
 
@@ -308,7 +291,7 @@ Always informed before you act.
 
 ## Configuration
 
-All tools work out of the box. For the best experience, add your session token:
+All tools work out of the box. Add optional keys for extra features:
 
 ```json
 {
@@ -317,21 +300,24 @@ All tools work out of the box. For the best experience, add your session token:
       "command": "npx",
       "args": ["-y", "@noelclaw/mcp"],
       "env": {
-        "NOELCLAW_SESSION_TOKEN": "noel_..."
+        "FIRECRAWL_API_KEY": "fc-...",
+        "TRIGGER_SECRET_KEY": "tr_prod_..."
       }
     }
   }
 }
 ```
 
-Get your session token at [noelclaw.com](https://noelclaw.com) — it's the only credential you need. With it, the CLI (`npx noelclaw`) gets full tool use through the Noelclaw backend without requiring your own Anthropic key.
-
 | Variable | Purpose |
 |----------|---------|
-| `NOELCLAW_SESSION_TOKEN` | **Recommended.** Unlocks all tools + full agent mode. Get one at [noelclaw.com](https://noelclaw.com) |
-| `ANTHROPIC_API_KEY` | Use your own Claude quota instead of the platform key |
+| `NOELCLAW_SESSION_TOKEN` | Session token from noelclaw.com — recommended for full access |
+| `ANTHROPIC_API_KEY` | Use your own Claude quota |
 | `BANKR_API_KEY` | Use Bankr/Grok instead of Anthropic |
-| `NOELCLAW_CONVEX_URL` | Override backend URL (self-hosted deployments only) |
+| `FIRECRAWL_API_KEY` | Required for `web_search` and `web_scrape` |
+| `TRIGGER_SECRET_KEY` | Required for `create_monitor` |
+| `TELEGRAM_BOT_TOKEN` | Your Telegram bot token — for monitor notifications |
+| `TELEGRAM_CHAT_ID` | Your Telegram chat ID |
+| `ALCHEMY_API_KEY` | Faster swap quotes and Base balance lookups |
 
 ---
 
@@ -340,9 +326,12 @@ Get your session token at [noelclaw.com](https://noelclaw.com) — it's the only
 | Problem | Fix |
 |---------|-----|
 | Tools not appearing | Restart your MCP client after adding the config |
-| Swarm returns auth error | Add `NOELCLAW_API_KEY` — get one at app.noelclaw.com |
-| Server starts but no output | Expected — server waits for MCP stdin, not HTTP |
-| Old version loading | Run `npx clear-npx-cache` then restart your client |
+| Old version loading | Run `npx clear-npx-cache` then restart |
+| `web_search` fails | Add `FIRECRAWL_API_KEY` to env |
+| `create_monitor` fails | Add `TRIGGER_SECRET_KEY` to env |
+| No Telegram notifications | Add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` to env |
+| Swap fails | Check balance with `get_portfolio`, confirm Base mainnet connectivity |
+| Rate limit (429) | Auto-retries up to 3× with backoff — no action needed |
 
 ---
 
@@ -351,4 +340,4 @@ Get your session token at [noelclaw.com](https://noelclaw.com) — it's the only
 - npm: [npmjs.com/package/@noelclaw/mcp](https://www.npmjs.com/package/@noelclaw/mcp)
 - GitHub: [github.com/noelclaw/mcp](https://github.com/noelclaw/mcp)
 - App: [app.noelclaw.com](https://app.noelclaw.com)
-- Docs: [docs.noelclaw.fun](https://docs.noelclaw.fun)
+- Docs: [docs.noelclaw.com](https://docs.noelclaw.com)
