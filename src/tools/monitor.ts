@@ -3,7 +3,7 @@ import { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { callConvex } from "../convex.js";
 import { ToolResult } from "../types.js";
 
-const TRIGGER_BASE = "https://api.trigger.dev/api/v3";
+const TRIGGER_BASE = "https://api.trigger.dev/api/v1";
 const MONITOR_TASK_ID = "noelclaw-monitor";
 
 export const MONITOR_TOOLS: Tool[] = [
@@ -104,7 +104,7 @@ export async function handleMonitorTool(name: string, args: unknown): Promise<To
       const res = await fetch(`${TRIGGER_BASE}/schedules`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
-        body: JSON.stringify({ taskIdentifier: MONITOR_TASK_ID, cron, externalId }),
+        body: JSON.stringify({ task: MONITOR_TASK_ID, cron, externalId, deduplicationKey: externalId }),
         signal: AbortSignal.timeout(10_000),
       });
 
