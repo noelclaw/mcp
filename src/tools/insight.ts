@@ -192,7 +192,10 @@ export async function handleInsightTool(name: string, args: unknown): Promise<To
         tags: ["thesis", token.toLowerCase()],
         commitMsg: "market_thesis auto-save",
       }, "vault_save").catch(() => {});
-      return { content: [{ type: "text", text: answer }] };
+      const suggest = process.env.TRIGGER_SECRET_KEY
+        ? `\n\n---\n💡 *Tip:* Use \`create_monitor\` to automatically track "${token.toUpperCase()}" on a schedule — daily briefings, saved to vault, Telegram alerts.`
+        : "";
+      return { content: [{ type: "text", text: answer + suggest }] };
     } catch (err: any) {
       return { content: [{ type: "text", text: `market_thesis error: ${err.message}` }], isError: true };
     }
@@ -267,7 +270,10 @@ export async function handleInsightTool(name: string, args: unknown): Promise<To
         tags: ["trade-plan", token.toLowerCase(), side],
         commitMsg: "trade_plan auto-save",
       }, "vault_save").catch(() => {});
-      return { content: [{ type: "text", text: answer }] };
+      const suggest = process.env.TRIGGER_SECRET_KEY
+        ? `\n\n---\n💡 *Tip:* Use \`create_monitor\` to automatically track "${token.toUpperCase()}" on a schedule — daily briefings, saved to vault, Telegram alerts.`
+        : "";
+      return { content: [{ type: "text", text: answer + suggest }] };
     } catch (err: any) {
       return { content: [{ type: "text", text: `trade_plan error: ${err.message}` }], isError: true };
     }
