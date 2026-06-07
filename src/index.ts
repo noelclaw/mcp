@@ -55,6 +55,7 @@ async function main() {
     { label: "OS",         count: 3,  tools: "noel_boot · noel_status · noel_shutdown" },
     { label: "Research",   count: 2,  tools: "web_scrape · web_search" },
     { label: "Monitor",    count: 3,  tools: "create_monitor · list_monitors · cancel_monitor" },
+    { label: "GitHub",     count: 8,  tools: "list_repos · list_prs · get_pr · list_issues · get_issue · get_file · get_commits · search_code" },
   ];
 
   const total = ALL_TOOLS.length;
@@ -69,7 +70,7 @@ async function main() {
     ? `Anthropic  ${C.dim}${model}${C.reset}`
     : `Noelclaw  ${C.dim}proxy · auto-auth${C.reset}`;
 
-  line("version", `v3.3.0  ${C.dim}MCP protocol 2.1.0${C.reset}`);
+  line("version", `v3.5.0  ${C.dim}MCP protocol 2.1.0${C.reset}`);
   line("ai",       aiMode);
   line("tools",    `${C.white}${C.bold}${total} tools loaded${C.reset}  ${C.dim}across ${categories.length} categories${C.reset}`);
 

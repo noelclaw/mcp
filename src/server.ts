@@ -20,6 +20,7 @@ import { MEMORY_TOOLS, handleMemoryTool } from "./tools/memory.js";
 import { OS_TOOLS, handleOsTool } from "./tools/os.js";
 import { RESEARCH_TOOLS, handleResearchTool } from "./tools/research.js";
 import { MONITOR_TOOLS, handleMonitorTool } from "./tools/monitor.js";
+import { GITHUB_TOOLS, handleGithubTool } from "./tools/github.js";
 
 const PRIVATE_KEY_RESPONSE = {
   content: [{
@@ -57,7 +58,8 @@ export const ALL_TOOLS = [
   ...OS_TOOLS,           // 3 — noel_status, noel_boot, noel_shutdown
   ...RESEARCH_TOOLS,     // 2 — web_scrape, web_search
   ...MONITOR_TOOLS,      // 4 — schedule_research, create_monitor (alias), list_monitors, cancel_monitor
-  // total: 87 (vault +2: link, related · agents +3: spawn, recall, update)
+  ...GITHUB_TOOLS,       // 8 — list_repos, list_prs, get_pr, list_issues, get_issue, get_file, get_commits, search_code
+  // total: 95
 ];
 
 // Build O(1) dispatch map at startup — avoids sequential chained awaits per call
@@ -82,10 +84,11 @@ export const HANDLER_MAP = new Map<string, Handler>([
   ...OS_TOOLS.map(t          => [t.name, handleOsTool]           as [string, Handler]),
   ...RESEARCH_TOOLS.map(t    => [t.name, handleResearchTool]     as [string, Handler]),
   ...MONITOR_TOOLS.map(t     => [t.name, handleMonitorTool]      as [string, Handler]),
+  ...GITHUB_TOOLS.map(t      => [t.name, handleGithubTool]       as [string, Handler]),
 ]);
 
 export const server = new Server(
-  { name: "noelclaw", version: "3.3.0" },
+  { name: "noelclaw", version: "3.5.0" },
   { capabilities: { tools: {} } }
 );
 
