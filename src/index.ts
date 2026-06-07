@@ -41,18 +41,18 @@ async function main() {
     { label: "Insight",    count: 3,  tools: "ask_noel · market_thesis · trade_plan" },
     { label: "DeFi",       count: 6,  tools: "get_portfolio · estimate_swap · swap_tokens · send_token · analyze_wallet · get_defi_yields" },
     { label: "Automation", count: 6,  tools: "create · list · pause · delete · runs · run_now" },
-    { label: "Swarm",      count: 6,  tools: "start_swarm · stop_swarm · get_swarm_status · swarm_research · trigger_agent · swarm_brief" },
+    { label: "Swarm",      count: 5,  tools: "stop_swarm · get_swarm_status · swarm_research · trigger_agent · swarm_synthesize" },
     { label: "Framework",  count: 3,  tools: "list_playbooks · run_playbook · get_noel_ledger" },
-    { label: "Vault",      count: 12, tools: "save · read · list · search · history · diff · export · credential · pin · delete · link · tag" },
+    { label: "Vault",      count: 14, tools: "save · read · list · search · history · diff · export · credential · pin · delete · link · tag · related · related" },
     { label: "Wallet",     count: 2,  tools: "get_wallet_address · set_telegram" },
     { label: "MiroShark",  count: 3,  tools: "simulate · status · stop" },
-    { label: "Scanner",    count: 4,  tools: "scan_dips · scan_momentum · score_token · check_token" },
+    { label: "Scanner",    count: 3,  tools: "scan_market · score_token · check_token" },
     { label: "Agents",     count: 2,  tools: "list_agents · hire_agent" },
-    { label: "Social",     count: 3,  tools: "humanize_text · write_thread · write_post" },
+    { label: "Social",     count: 2,  tools: "humanize_text · write_content" },
     { label: "Coder",      count: 5,  tools: "generate_contract · audit_contract · explain_code · review_code · generate_mcp_skill" },
     { label: "Base",       count: 4,  tools: "query_vaults · list_markets · prepare_deposit · chain_stats" },
     { label: "Memory",     count: 9,  tools: "add · search · context · profile · list · delete · insight · extract · consolidate" },
-    { label: "OS",         count: 3,  tools: "noel_boot · noel_status · noel_shutdown" },
+    { label: "OS",         count: 1,  tools: "noel_status" },
     { label: "Research",   count: 2,  tools: "web_scrape · web_search" },
     { label: "Monitor",    count: 3,  tools: "create_monitor · list_monitors · cancel_monitor" },
     { label: "GitHub",     count: 8,  tools: "list_repos · list_prs · get_pr · list_issues · get_issue · get_file · get_commits · search_code" },
@@ -70,7 +70,7 @@ async function main() {
     ? `Anthropic  ${C.dim}${model}${C.reset}`
     : `Noelclaw  ${C.dim}proxy · auto-auth${C.reset}`;
 
-  line("version", `v3.5.0  ${C.dim}MCP protocol 2.1.0${C.reset}`);
+  line("version", `v3.5.1  ${C.dim}MCP protocol 2.1.0${C.reset}`);
   line("ai",       aiMode);
   line("tools",    `${C.white}${C.bold}${total} tools loaded${C.reset}  ${C.dim}across ${categories.length} categories${C.reset}`);
 

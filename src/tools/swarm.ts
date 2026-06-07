@@ -80,26 +80,12 @@ export const SWARM_TOOLS: Tool[] = [
     },
   },
   {
-    name: "swarm_brief",
-    description:
-      "Show everything the swarm has researched across all sessions — grouped by agent, with content previews. " +
-      "Use this to catch up on what agents found while you were away, or to see what topics have been covered. " +
-      "After reviewing, call swarm_synthesize to get a full intelligence report.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        limit: { type: "number", description: "Max entries (default 12)" },
-      },
-      required: [],
-    },
-  },
-  {
     name: "swarm_synthesize",
     description:
       "Synthesize all swarm research findings into one coherent intelligence report. " +
       "Fetches all vault entries from swarm agents, consolidates overlapping facts, " +
       "identifies key signals and gaps, and produces a structured report with actionable next steps. " +
-      "Call this after swarm_research or swarm_brief to turn raw agent findings into a decision-ready summary.",
+      "Call this after swarm_research to turn raw agent findings into a decision-ready summary.",
     inputSchema: {
       type: "object",
       properties: {
@@ -121,7 +107,7 @@ const StartSwarmSchema = z.object({
 });
 const ResearchSchema    = z.object({ topic: z.string().min(1), depth: z.enum(["quick", "standard", "deep"]).optional(), synthesize: z.boolean().optional() });
 const BriefSchema       = z.object({ limit: z.number().optional() });
-const SynthesizeSchema  = z.object({ topic: z.string().optional(), depth: z.enum(["summary", "full"]).optional() });
+const SynthesizeSchema   = z.object({ topic: z.string().optional(), depth: z.enum(["summary", "full"]).optional() });
 const TriggerAgentSchema = z.object({
   agentId: z.enum(["market-monitor", "sentiment-tracker", "memory-manager", "risk-verifier", "workflow-executor", "onchain-analyst", "news-aggregator"]),
   params: z.record(z.string(), z.any()).optional(),
@@ -290,7 +276,7 @@ export async function handleSwarmTool(name: string, args: unknown): Promise<Tool
       let data: any;
       try { data = await callConvex("/swarm/stop", "POST", {}, "stop_swarm"); } catch (err) { return swarmAuthError(err); }
       if (!data.success) return { content: [{ type: "text", text: `Failed: ${data.error}` }], isError: true };
-      return { content: [{ type: "text", text: `⏹️ Swarm stopped. Use \`swarm_brief\` to review what was found, or \`noel_shutdown\` for a full session summary.` }] };
+      return { content: [{ type: "text", text: `⏹️ Swarm stopped. Use \`swarm_synthesize\` to get a full intelligence report from all findings.` }] };
     }
 
     case "get_swarm_status": {
@@ -338,7 +324,7 @@ export async function handleSwarmTool(name: string, args: unknown): Promise<Tool
         lines.push(``);
       }
 
-      lines.push(`💡 \`swarm_research topic: "..."\` to launch research · \`swarm_brief\` to see findings`);
+      lines.push(`💡 \`swarm_research topic: "..."\` to launch research · \`swarm_synthesize\` to get the full report`);
       return { content: [{ type: "text", text: lines.join("\n") }] };
     }
 
@@ -397,7 +383,7 @@ export async function handleSwarmTool(name: string, args: unknown): Promise<Tool
         }
       } else {
         lines.push(`**When ready:** \`swarm_synthesize topic: "${topic}"\` — consolidated intelligence report`);
-        lines.push(`Or: \`swarm_brief\` — raw findings grouped by agent`);
+        lines.push(`Or: \`swarm_synthesize\` — synthesize all findings into an intelligence report`);
       }
 
       return { content: [{ type: "text", text: lines.join("\n") }] };
@@ -448,49 +434,6 @@ export async function handleSwarmTool(name: string, args: unknown): Promise<Tool
           ].filter(Boolean).join("\n"),
         }],
       };
-    }
-
-    case "swarm_brief": {
-      const parsed = BriefSchema.safeParse(args ?? {});
-      if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
-      const limit = parsed.data.limit ?? 12;
-
-      const params = new URLSearchParams({ type: "research", limit: String(limit) });
-      let data: any;
-      try { data = await callConvex(`/vault/list?${params}`, "GET", undefined, "swarm_brief"); } catch (err) { return swarmAuthError(err); }
-      if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
-
-      const entries: any[] = (data.entries ?? []).filter((e: any) => e.agentId && SWARM_AGENTS.has(e.agentId));
-
-      if (!entries.length) {
-        return { content: [{ type: "text", text: `No swarm research in vault yet.\n\nRun \`swarm_research topic: "BTC"\` to build your knowledge base.` }] };
-      }
-
-      // Group by agent
-      const byAgent: Record<string, any[]> = {};
-      for (const e of entries) {
-        if (!byAgent[e.agentId]) byAgent[e.agentId] = [];
-        byAgent[e.agentId].push(e);
-      }
-
-      const lines = [`📋 **Swarm Brief** — ${entries.length} research entries across ${Object.keys(byAgent).length} agents\n`];
-
-      for (const [agentId, agentEntries] of Object.entries(byAgent)) {
-        lines.push(`${AGENT_EMOJI[agentId] ?? "•"} **${agentId}** (${agentEntries.length})`);
-        for (const e of agentEntries) {
-          const preview = e.preview ? `  _${e.preview.slice(0, 90).replace(/\n/g, " ")}_` : "";
-          lines.push(`  • ${e.title} · v${e.version} · ${formatDate(e.updatedAt)}`);
-          if (preview) lines.push(preview);
-          lines.push(`    Key: \`${e.key}\``);
-        }
-        lines.push(``);
-      }
-
-      lines.push(`**Synthesize:** \`swarm_synthesize\` — consolidated intelligence report`);
-      lines.push(`**Deep read:** \`vault_read key: "..."\` — full content of any entry`);
-      lines.push(`**Context:** \`memory_context topic: "..."\` — load relevant findings into context`);
-
-      return { content: [{ type: "text", text: lines.join("\n") }] };
     }
 
     case "swarm_synthesize": {

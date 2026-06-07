@@ -284,29 +284,17 @@ export const SCANNER_TOOLS: Tool[] = [
     },
   },
   {
-    name: "scan_dips",
-    description: "Scan all trending + new Base pools right now for dip-reversal opportunities. Fetches GeckoTerminal data, runs the 6-component scorer on each pool, returns ranked candidates. Zero API keys required.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        minScore:     { type: "number", description: "Min score to include in results (default 50)" },
-        minLiquidity: { type: "number", description: "Min pool liquidity in USD (default 50000)" },
-        limit:        { type: "number", description: "Max pools to scan (default 40, max 100)" },
-      },
-      required: [],
-    },
-  },
-  {
-    name: "scan_momentum",
+    name: "scan_market",
     description:
-      "Scan Base pools for momentum breakout setups — tokens with strong 1h+ upward momentum that are still accelerating. " +
-      "The inverse of scan_dips: finds BREAKOUT / MOMENTUM / PUSH patterns instead of dip-reversals. " +
-      "Gates: 1h > +3%, 5m still rising, buy pressure > 55%, not already parabolic (24h < 150%). " +
-      "Returns scored and ranked candidates. No API keys required.",
+      "Scan all trending + new Base pools for trading opportunities. Two modes: " +
+      "'dips' finds dip-reversal setups (6-component scorer: momentum, buy pressure, depth, volume surge, trend context, volatility). " +
+      "'momentum' finds breakout setups — tokens with strong 1h+ upward momentum still accelerating (gates: 1h > +3%, 5m rising, buy pressure > 55%). " +
+      "No API keys required.",
     inputSchema: {
       type: "object",
       properties: {
-        minScore:     { type: "number", description: "Min score to include (default 50)" },
+        mode:         { type: "string", enum: ["dips", "momentum"], description: "Scan mode: 'dips' for reversal setups (default), 'momentum' for breakouts" },
+        minScore:     { type: "number", description: "Min score to include in results (default 50)" },
         minLiquidity: { type: "number", description: "Min pool liquidity in USD (default 50000)" },
         limit:        { type: "number", description: "Max pools to scan (default 40, max 100)" },
       },
@@ -461,11 +449,13 @@ export async function handleScannerTool(name: string, args: unknown): Promise<To
     return { content: [{ type: "text", text: lines.join("\n") }] };
   }
 
-  // ── scan_dips ──────────────────────────────────────────────────────────────
-  if (name === "scan_dips") {
+  // ── scan_market ────────────────────────────────────────────────────────────
+  if (name === "scan_market") {
     const parsed = ScanDipsSchema.safeParse(args ?? {});
     if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
 
+    const input = args as any;
+    const mode = input?.mode === "momentum" ? "momentum" : "dips";
     const { minScore = DEFAULT_MIN_SCORE, minLiquidity = DEFAULT_MIN_LIQ, limit = 40 } = parsed.data;
 
     let candidates: Candidate[];
@@ -475,7 +465,48 @@ export async function handleScannerTool(name: string, args: unknown): Promise<To
       return { content: [{ type: "text", text: err.message }], isError: true };
     }
 
-    // Score each candidate — keep only those that passed gates + meet minScore
+    const sign = (n: number) => n >= 0 ? `+${n.toFixed(1)}` : n.toFixed(1);
+
+    if (mode === "momentum") {
+      type ScoredMomentum = Candidate & MomentumResult;
+      const scored: ScoredMomentum[] = candidates
+        .map(c => ({ ...c, ...scoreMomentum(c, minLiquidity) }))
+        .filter(c => c.passed && c.score >= minScore)
+        .sort((a, b) => b.score - a.score);
+
+      if (!scored.length) {
+        return {
+          content: [{
+            type: "text",
+            text: [
+              `## Momentum Scan — No Breakouts Found`,
+              `Scanned **${candidates.length} pools** on Base. None passed the momentum gates with score ≥ ${minScore}.`,
+              `When nothing breaks out, the market may be in consolidation. Try \`scan_market mode=dips\` instead.`,
+            ].join("\n"),
+          }],
+        };
+      }
+
+      const lines = [
+        `## Momentum Scan — ${scored.length} Breakout${scored.length !== 1 ? "s" : ""} Found`,
+        `Scanned **${candidates.length} pools** · Score ≥ ${minScore} · Liq ≥ $${(minLiquidity / 1000).toFixed(0)}k`,
+        ``,
+      ];
+      for (const c of scored.slice(0, 10)) {
+        const bar = "█".repeat(Math.round(c.score / 10)).padEnd(10, "░");
+        lines.push(`### ${c.symbol} · ${c.score}/100 \`${bar}\``);
+        lines.push(`**Pattern:** ${c.pattern} · **Liq:** $${(c.liquidity / 1_000).toFixed(0)}k · **1h:** ${sign(c.priceChange1h)}% · **5m:** ${sign(c.priceChange5m)}%`);
+        lines.push(`**Buy pressure:** ${c.buyPressure5m.toFixed(0)}% · **Vol 1h:** $${(c.volume1h / 1_000).toFixed(0)}k`);
+        lines.push(`**Trend:** 6h ${sign(c.priceChange6h)}% / 24h ${sign(c.priceChange24h)}%`);
+        lines.push(`\`${c.mint}\``);
+        lines.push(``);
+      }
+      lines.push(`---`);
+      lines.push(`Next steps: \`score_token\` · \`check_token\` for rug check`);
+      return { content: [{ type: "text", text: lines.join("\n") }] };
+    }
+
+    // mode === "dips"
     type ScoredCandidate = Candidate & ScoreResult;
     const scored: ScoredCandidate[] = candidates
       .map(c => ({ ...c, ...scoreDipReversal(c, minLiquidity) }))
@@ -488,12 +519,8 @@ export async function handleScannerTool(name: string, args: unknown): Promise<To
           type: "text",
           text: [
             `## Dip Scan — No Setups Found`,
-            ``,
             `Scanned **${candidates.length} pools** on Base. None passed the dip-reversal gates with score ≥ ${minScore}.`,
-            ``,
-            `**This is a signal in itself** — when nothing scores, the market is likely not in dip-reversal mode.`,
-            ``,
-            `Try: \`scan_dips minScore=30\` to see weak setups, or check back in 5–10 minutes.`,
+            `This is a signal in itself — try \`scan_market mode=momentum\` or check back in 5–10 minutes.`,
           ].join("\n"),
         }],
       };
@@ -504,12 +531,9 @@ export async function handleScannerTool(name: string, args: unknown): Promise<To
       `Scanned **${candidates.length} pools** · Score ≥ ${minScore} · Liq ≥ $${(minLiquidity / 1000).toFixed(0)}k`,
       ``,
     ];
-
     for (const c of scored.slice(0, 10)) {
       const bar = "█".repeat(Math.round(c.score / 10)).padEnd(10, "░");
       const bd  = c.breakdown;
-      const sign = (n: number) => n >= 0 ? `+${n.toFixed(1)}` : n.toFixed(1);
-
       lines.push(`### ${c.symbol} · ${c.score}/100 \`${bar}\``);
       lines.push(`**Pattern:** ${c.pattern} · **Liq:** $${(c.liquidity / 1_000).toFixed(0)}k · **1h:** ${sign(c.priceChange1h)}% · **5m:** ${sign(c.priceChange5m)}%`);
       lines.push(`**Buy pressure:** ${c.buyPressure5m.toFixed(0)}% · **Vol 1h:** $${((bd.activity?.vol1h ?? 0) / 1_000).toFixed(0)}k · **Txns:** ${bd.activity?.txns1h ?? 0}`);
@@ -517,70 +541,8 @@ export async function handleScannerTool(name: string, args: unknown): Promise<To
       lines.push(`\`${c.mint}\``);
       lines.push(``);
     }
-
     lines.push(`---`);
-    lines.push(`Next steps: \`score_token\` for full breakdown · \`check_token\` for rug check before buying`);
-
-    return { content: [{ type: "text", text: lines.join("\n") }] };
-  }
-
-  // ── scan_momentum ──────────────────────────────────────────────────────────
-  if (name === "scan_momentum") {
-    const parsed = ScanMomentumSchema.safeParse(args ?? {});
-    if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
-
-    const { minScore = DEFAULT_MIN_SCORE, minLiquidity = DEFAULT_MIN_LIQ, limit = 40 } = parsed.data;
-
-    let candidates: Candidate[];
-    try {
-      candidates = await fetchBasePools(minLiquidity, limit);
-    } catch (err: any) {
-      return { content: [{ type: "text", text: err.message }], isError: true };
-    }
-
-    type ScoredMomentum = Candidate & MomentumResult;
-    const scored: ScoredMomentum[] = candidates
-      .map(c => ({ ...c, ...scoreMomentum(c, minLiquidity) }))
-      .filter(c => c.passed && c.score >= minScore)
-      .sort((a, b) => b.score - a.score);
-
-    if (!scored.length) {
-      return {
-        content: [{
-          type: "text",
-          text: [
-            `## Momentum Scan — No Breakouts Found`,
-            ``,
-            `Scanned **${candidates.length} pools** on Base. None passed the momentum gates with score ≥ ${minScore}.`,
-            ``,
-            `When nothing breaks out, the market may be in consolidation or distribution.`,
-            ``,
-            `Try: \`scan_dips\` to look for reversal opportunities instead.`,
-          ].join("\n"),
-        }],
-      };
-    }
-
-    const sign = (n: number) => n >= 0 ? `+${n.toFixed(1)}` : n.toFixed(1);
-    const lines = [
-      `## Momentum Scan — ${scored.length} Breakout${scored.length !== 1 ? "s" : ""} Found`,
-      `Scanned **${candidates.length} pools** · Score ≥ ${minScore} · Liq ≥ $${(minLiquidity / 1000).toFixed(0)}k`,
-      ``,
-    ];
-
-    for (const c of scored.slice(0, 10)) {
-      const bar = "█".repeat(Math.round(c.score / 10)).padEnd(10, "░");
-      lines.push(`### ${c.symbol} · ${c.score}/100 \`${bar}\``);
-      lines.push(`**Pattern:** ${c.pattern} · **Liq:** $${(c.liquidity / 1_000).toFixed(0)}k · **1h:** ${sign(c.priceChange1h)}% · **5m:** ${sign(c.priceChange5m)}%`);
-      lines.push(`**Buy pressure:** ${c.buyPressure5m.toFixed(0)}% · **Vol 1h:** $${(c.volume1h / 1_000).toFixed(0)}k`);
-      lines.push(`**Trend:** 6h ${sign(c.priceChange6h)}% / 24h ${sign(c.priceChange24h)}%`);
-      lines.push(`\`${c.mint}\``);
-      lines.push(``);
-    }
-
-    lines.push(`---`);
-    lines.push(`Next steps: \`score_token\` for dip-reversal score · \`check_token\` for rug check before buying`);
-
+    lines.push(`Next steps: \`score_token\` for full breakdown · \`check_token\` for rug check`);
     return { content: [{ type: "text", text: lines.join("\n") }] };
   }
 

@@ -44,22 +44,22 @@ export const ALL_TOOLS = [
   ...INSIGHT_TOOLS,      // 3 — ask_noel, market_thesis, trade_plan
   ...DEFI_TOOLS,         // 6 — get_portfolio, estimate_swap, swap_tokens, send_token, analyze_wallet, get_defi_yields
   ...AUTOMATION_TOOLS,   // 6 — create, list, pause, delete, get_runs, run
-  ...SWARM_TOOLS,        // 6 — stop, status, research, trigger_agent, brief, synthesize (start_swarm is internal)
+  ...SWARM_TOOLS,        // 5 — stop, status, research, trigger_agent, synthesize (start_swarm is internal)
   ...FRAMEWORK_TOOLS,    // 3 — list_playbooks, run_playbook, get_noel_ledger
   ...VAULT_TOOLS,        // 14 — save, read, list, search, history, diff, export, store_credential, get_credential, pin, delete, tag, link, related
   ...WALLET_TOOLS,       // 2 — get_wallet_address, set_telegram
   ...MIROSHARK_TOOLS,    // 3 — simulate, status, stop
-  ...HUMANIZER_TOOLS,    // 3 — humanize_text, write_thread, write_post
+  ...HUMANIZER_TOOLS,    // 2 — humanize_text, write_content (thread+post merged)
   ...AGENT_TOOLS,        // 5 — list_agents, hire_agent, agent_spawn, agent_recall, agent_update
-  ...SCANNER_TOOLS,      // 4 — score_token, check_token, scan_dips, scan_momentum
+  ...SCANNER_TOOLS,      // 3 — score_token, check_token, scan_market (dips+momentum merged)
   ...CODER_TOOLS,        // 5 — generate_contract, audit_contract, explain_code, review_code, generate_mcp_skill
   ...BASE_TOOLS,         // 4 — query_vaults, list_markets, prepare_deposit, chain_stats
   ...MEMORY_TOOLS,       // 9 — memory_add, memory_search, memory_context, memory_profile, memory_list, memory_delete, memory_insight, memory_extract, memory_consolidate
-  ...OS_TOOLS,           // 3 — noel_status, noel_boot, noel_shutdown
+  ...OS_TOOLS,           // 1 — noel_status
   ...RESEARCH_TOOLS,     // 2 — web_scrape, web_search
   ...MONITOR_TOOLS,      // 4 — schedule_research, create_monitor (alias), list_monitors, cancel_monitor
   ...GITHUB_TOOLS,       // 8 — list_repos, list_prs, get_pr, list_issues, get_issue, get_file, get_commits, search_code
-  // total: 95
+  // total: 90
 ];
 
 // Build O(1) dispatch map at startup — avoids sequential chained awaits per call
@@ -88,7 +88,7 @@ export const HANDLER_MAP = new Map<string, Handler>([
 ]);
 
 export const server = new Server(
-  { name: "noelclaw", version: "3.5.0" },
+  { name: "noelclaw", version: "3.5.1" },
   { capabilities: { tools: {} } }
 );
 
