@@ -8,7 +8,7 @@ import { searchSupermemory } from "./memory.js";
 export const INSIGHT_TOOLS: Tool[] = [
   {
     name: "ask_noel",
-    description: "Ask Noel AI for opinions, analysis, trade ideas, and market outlook. Use this for subjective questions like 'is now a good time to buy', 'what do you think about ETH', 'give me your analysis'. Do NOT use for factual data like gas price or live prices — use base_chain_stats or get_market_data for those.",
+    description: "Ask Noel anything — analysis, opinions, explanations, strategy, or ideas. Noel loads your saved memory to personalize every answer. Use for: research questions, content ideas, code explanations, decision-making, DeFi analysis, trade ideas, or just thinking out loud. Pass previous messages to continue a conversation across tool calls.",
     inputSchema: {
       type: "object",
       properties: {
@@ -81,7 +81,7 @@ const TradePlanSchema = z.object({
   timeframe:     z.string().optional(),
 });
 
-const NOEL_BASE_PROMPT = `You are Noel, a crypto AI analyst and the core intelligence of the Noelclaw AI Operating System. You have deep expertise in DeFi, on-chain data, market structure, and trading psychology. You provide sharp, direct analysis — no fluff, no disclaimers. You understand narratives, liquidity flows, whale behavior, and how sentiment drives price. When asked about a token or market, give your honest read with supporting reasoning.`;
+const NOEL_BASE_PROMPT = `You are Noel, the core intelligence of the Noelclaw AI Operating System — an AI built to research, analyze, and execute across any domain. You are direct, sharp, and thorough. You draw on 82 tools covering persistent memory, multi-agent research, web search, workflow automation, code, and DeFi on Base. When asked anything, give your honest read backed by real reasoning. No filler, no disclaimers.`;
 
 async function buildSystemPrompt(question: string): Promise<string> {
   const memories = await searchSupermemory(question, 5);
@@ -128,10 +128,13 @@ export async function handleInsightTool(name: string, args: unknown): Promise<To
 
     const systemPrompt = await buildSystemPrompt(question);
 
-    if (process.env.ANTHROPIC_API_KEY || process.env.BANKR_API_KEY) {
+    if (process.env.BANKR_API_KEY || process.env.ANTHROPIC_API_KEY) {
       try {
         const history = messages.map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
         const answer = await callLLM(systemPrompt, question, 1024, history);
+        callConvex("/memory/add", "POST", {
+          content: `Q: ${question.slice(0, 200)}\nA: ${answer.slice(0, 400)}`,
+        }, "ask_noel_memory").catch(() => {});
         return { content: [{ type: "text", text: answer }] };
       } catch (err: any) {
         // fall through to Convex
@@ -144,7 +147,11 @@ export async function handleInsightTool(name: string, args: unknown): Promise<To
       messages,
       systemPrompt,
     }, "ask_noel") as { answer?: string };
-    return { content: [{ type: "text", text: data.answer ?? JSON.stringify(data) }] };
+    const answer = data.answer ?? JSON.stringify(data);
+    callConvex("/memory/add", "POST", {
+      content: `Q: ${question.slice(0, 200)}\nA: ${answer.slice(0, 400)}`,
+    }, "ask_noel_memory").catch(() => {});
+    return { content: [{ type: "text", text: answer }] };
   }
 
   if (name === "market_thesis") {

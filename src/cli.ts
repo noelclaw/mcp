@@ -58,10 +58,10 @@ async function main() {
   process.stdout.write(BANNER);
 
   // Detect active LLM
-  const mode = process.env.ANTHROPIC_API_KEY
-    ? `${C.green}Anthropic${C.reset} ${C.dim}(full tool use)${C.reset}`
-    : process.env.BANKR_API_KEY
+  const mode = process.env.BANKR_API_KEY
     ? `${C.green}Bankr${C.reset} ${C.dim}(full tool use)${C.reset}`
+    : process.env.ANTHROPIC_API_KEY
+    ? `${C.green}Anthropic${C.reset} ${C.dim}(full tool use)${C.reset}`
     : `${C.green}Noelclaw${C.reset} ${C.dim}(full tool use · auto-wallet)${C.reset}`;
 
   console.log(`  ${C.dim}Mode:${C.reset} ${mode}\n`);

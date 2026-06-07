@@ -187,6 +187,46 @@ export const VAULT_TOOLS: Tool[] = [
       required: ["key", "tags"],
     },
   },
+  {
+    name: "vault_link",
+    description:
+      "Create a semantic relationship between two Noel-Vault entries — building a knowledge graph. " +
+      "Relations: references | derived_from | supersedes | related | continues. " +
+      "Example: link a synthesis entry as 'derived_from' several research entries, or mark a newer analysis as 'supersedes' an older one. " +
+      "Duplicate links are updated in-place.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        fromKey: { type: "string", description: "Source entry key" },
+        toKey:   { type: "string", description: "Target entry key" },
+        relation: {
+          type: "string",
+          enum: ["references", "derived_from", "supersedes", "related", "continues"],
+          description: "How fromKey relates to toKey",
+        },
+      },
+      required: ["fromKey", "toKey", "relation"],
+    },
+  },
+  {
+    name: "vault_related",
+    description:
+      "Traverse the Noel-Vault knowledge graph — get all entries linked to a given entry. " +
+      "Returns both outbound links (entries this entry references) and inbound links (entries that reference this one). " +
+      "Filter by relation type to find only derived entries, superseded versions, continuations, etc.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        key:      { type: "string", description: "Entry key to find related entries for" },
+        relation: {
+          type: "string",
+          enum: ["references", "derived_from", "supersedes", "related", "continues"],
+          description: "Filter to only this relation type (omit for all relations)",
+        },
+      },
+      required: ["key"],
+    },
+  },
 ];
 
 // ─── Zod schemas ─────────────────────────────────────────────────────────────
@@ -223,6 +263,9 @@ const GetCredentialSchema = z.object({ name: z.string().min(1) });
 const PinSchema = z.object({ key: z.string().min(1), pinned: z.boolean().optional() });
 const DeleteSchema = z.object({ key: z.string().min(1) });
 const TagSchema = z.object({ key: z.string().min(1), tags: z.array(z.string()).min(1), replace: z.boolean().optional() });
+const VAULT_RELATIONS = ["references", "derived_from", "supersedes", "related", "continues"] as const;
+const LinkSchema    = z.object({ fromKey: z.string().min(1), toKey: z.string().min(1), relation: z.enum(VAULT_RELATIONS) });
+const RelatedSchema = z.object({ key: z.string().min(1), relation: z.enum(VAULT_RELATIONS).optional() });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -468,6 +511,32 @@ export async function handleVaultTool(name: string, args: unknown): Promise<Tool
       const data = await callConvex("/vault/tag", "POST", { key, tags, replace }, "vault_tag");
       if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
       return { content: [{ type: "text", text: `🏷️ Tags ${replace ? "set" : "updated"} on \`${key}\`: ${(data.tags ?? tags).join(", ")}` }] };
+    }
+
+    case "vault_link": {
+      const parsed = LinkSchema.safeParse(args);
+      if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
+      const { fromKey, toKey, relation } = parsed.data;
+      const data = await callConvex("/vault/link", "POST", { fromKey, toKey, relation }, "vault_link");
+      if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
+      const action = data.updated ? "Updated link" : "Linked";
+      return { content: [{ type: "text", text: `🔗 ${action}: \`${fromKey}\` —[${relation}]→ \`${toKey}\`` }] };
+    }
+
+    case "vault_related": {
+      const parsed = RelatedSchema.safeParse(args);
+      if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
+      const { key, relation } = parsed.data;
+      const params = new URLSearchParams({ key });
+      if (relation) params.set("relation", relation);
+      const data = await callConvex(`/vault/related?${params}`, "GET", undefined, "vault_related") as {
+        key?: string; related?: Array<{ key: string; title: string; type: string; relation: string; direction: string }>; error?: string;
+      };
+      if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
+      const items = data.related ?? [];
+      if (!items.length) return { content: [{ type: "text", text: `No related entries found for \`${key}\`${relation ? ` (relation: ${relation})` : ""}.` }] };
+      const lines = items.map(r => `- **${r.title}** (\`${r.key}\`) [${r.type}] — ${r.direction} \`${r.relation}\``);
+      return { content: [{ type: "text", text: `## Related entries for \`${key}\` (${items.length})\n\n${lines.join("\n")}` }] };
     }
 
     default:

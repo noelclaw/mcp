@@ -31,12 +31,72 @@ export const AGENT_TOOLS: Tool[] = [
       required: ["agentId", "task"],
     },
   },
+  {
+    name: "agent_spawn",
+    description:
+      "Create a persistent named agent with a goal. The agent's state is saved to vault and survives across sessions. " +
+      "Use this when a task is ongoing — research you'll return to, a project you're tracking, a workflow you're iterating on. " +
+      "The agent starts with a goal and optional context. Update its progress with agent_update. Resume it with agent_recall.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name:    { type: "string", description: "Unique agent name (e.g. 'market-researcher', 'onboarding-helper')" },
+        goal:    { type: "string", description: "What this agent is trying to accomplish" },
+        context: { type: "string", description: "Optional starting context, data, or notes for the agent" },
+      },
+      required: ["name", "goal"],
+    },
+  },
+  {
+    name: "agent_recall",
+    description:
+      "Recall a persistent agent by name — loads its goal, current progress, findings, and full history. " +
+      "Use this to resume a long-running task, check what an agent last did, or pick up where you left off across sessions.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Agent name as used in agent_spawn" },
+      },
+      required: ["name"],
+    },
+  },
+  {
+    name: "agent_update",
+    description:
+      "Update a persistent agent's progress and findings. Creates a new vault version automatically — full history is preserved. " +
+      "Use this after completing a step: save findings, update status, note what's next. " +
+      "Status options: active | blocked | complete.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name:     { type: "string", description: "Agent name" },
+        progress: { type: "string", description: "What was accomplished in this update" },
+        findings: { type: "string", description: "Key findings, data, or outputs from this step" },
+        status:   { type: "string", enum: ["active", "blocked", "complete"], description: "Current agent status (default: active)" },
+        nextStep: { type: "string", description: "What should happen next (optional — helps on recall)" },
+      },
+      required: ["name", "progress"],
+    },
+  },
 ];
 
 const HireAgentSchema = z.object({
   agentId:   z.string().min(1),
   task:      z.string().min(1),
   maxTokens: z.number().int().min(100).max(1200).optional(),
+});
+const SpawnAgentSchema = z.object({
+  name:    z.string().min(1).max(60).regex(/^[a-z0-9-]+$/, "name must be lowercase alphanumeric with hyphens"),
+  goal:    z.string().min(1),
+  context: z.string().optional(),
+});
+const RecallAgentSchema = z.object({ name: z.string().min(1) });
+const UpdateAgentSchema = z.object({
+  name:     z.string().min(1),
+  progress: z.string().min(1),
+  findings: z.string().optional(),
+  status:   z.enum(["active", "blocked", "complete"]).optional(),
+  nextStep: z.string().optional(),
 });
 
 export async function handleAgentTool(name: string, args: unknown): Promise<ToolResult | null> {
@@ -84,6 +144,110 @@ export async function handleAgentTool(name: string, args: unknown): Promise<Tool
         type: "text",
         text: `## ${data.agent ?? agentId} — Response\n\n${data.result}${footer}`,
       }],
+    };
+  }
+
+  if (name === "agent_spawn") {
+    const parsed = SpawnAgentSchema.safeParse(args);
+    if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
+    const { name: agentName, goal, context } = parsed.data;
+
+    const content = JSON.stringify({
+      goal,
+      status: "active",
+      spawnedAt: new Date().toISOString(),
+      context: context ?? null,
+      updates: [],
+    }, null, 2);
+
+    const data = await callConvex("/vault/save", "POST", {
+      type:    "memory",
+      key:     `agent/${agentName}`,
+      title:   `Agent: ${agentName}`,
+      content,
+      contentType: "json",
+      agentId: agentName,
+      tags:    ["persistent-agent"],
+      commitMsg: "spawned",
+    }, "vault_save") as { key?: string; version?: number; error?: string };
+
+    if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
+    return {
+      content: [{ type: "text", text: `🤖 Agent **${agentName}** spawned.\n\n**Goal:** ${goal}\n\nRecall with \`agent_recall\` · Update progress with \`agent_update\`` }],
+    };
+  }
+
+  if (name === "agent_recall") {
+    const parsed = RecallAgentSchema.safeParse(args);
+    if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
+
+    const data = await callConvex(`/vault/entry?key=agent/${parsed.data.name}`, "GET", undefined, "vault_read") as {
+      key?: string; content?: string; version?: number; updatedAt?: number; error?: string;
+    };
+
+    if (data.error || !data.content) {
+      return { content: [{ type: "text", text: `Agent \`${parsed.data.name}\` not found. Spawn it first with \`agent_spawn\`.` }], isError: true };
+    }
+
+    let state: any = {};
+    try { state = JSON.parse(data.content); } catch { /* non-JSON content */ }
+
+    const updates: string[] = (state.updates ?? []).slice(-3).map((u: any, i: number) =>
+      `  ${i + 1}. [${u.status ?? "active"}] ${u.progress}${u.nextStep ? ` → next: ${u.nextStep}` : ""}`
+    );
+
+    const lines = [
+      `## Agent: ${parsed.data.name}`,
+      `**Goal:** ${state.goal ?? "—"}`,
+      `**Status:** ${state.status ?? "active"}`,
+      `**Version:** ${data.version ?? 1} · Updated: ${data.updatedAt ? new Date(data.updatedAt).toUTCString() : "—"}`,
+    ];
+    if (state.context) lines.push(`**Context:** ${state.context}`);
+    if (updates.length) lines.push(`\n**Recent updates:**\n${updates.join("\n")}`);
+    if (state.nextStep) lines.push(`\n**Next step:** ${state.nextStep}`);
+
+    return { content: [{ type: "text", text: lines.join("\n") }] };
+  }
+
+  if (name === "agent_update") {
+    const parsed = UpdateAgentSchema.safeParse(args);
+    if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
+    const { name: agentName, progress, findings, status = "active", nextStep } = parsed.data;
+
+    // Load current state
+    const current = await callConvex(`/vault/entry?key=agent/${agentName}`, "GET", undefined, "vault_read") as {
+      content?: string; error?: string;
+    };
+    if (current.error || !current.content) {
+      return { content: [{ type: "text", text: `Agent \`${agentName}\` not found. Spawn it first.` }], isError: true };
+    }
+
+    let state: any = {};
+    try { state = JSON.parse(current.content); } catch { /* start fresh */ }
+
+    const update: any = { progress, status, timestamp: new Date().toISOString() };
+    if (findings) update.findings = findings;
+    if (nextStep) update.nextStep = nextStep;
+
+    state.status  = status;
+    state.nextStep = nextStep ?? state.nextStep;
+    state.updates  = [...(state.updates ?? []), update].slice(-20);
+
+    const data = await callConvex("/vault/save", "POST", {
+      type:    "memory",
+      key:     `agent/${agentName}`,
+      title:   `Agent: ${agentName}`,
+      content: JSON.stringify(state, null, 2),
+      contentType: "json",
+      agentId: agentName,
+      commitMsg: `[${status}] ${progress.slice(0, 60)}`,
+    }, "vault_save") as { key?: string; version?: number; error?: string };
+
+    if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
+
+    const statusEmoji = status === "complete" ? "✅" : status === "blocked" ? "🚫" : "🔄";
+    return {
+      content: [{ type: "text", text: `${statusEmoji} Agent **${agentName}** updated (v${data.version}).\n\n**Progress:** ${progress}${findings ? `\n**Findings:** ${findings}` : ""}${nextStep ? `\n**Next:** ${nextStep}` : ""}` }],
     };
   }
 

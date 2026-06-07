@@ -43,21 +43,21 @@ export const ALL_TOOLS = [
   ...INSIGHT_TOOLS,      // 3 — ask_noel, market_thesis, trade_plan
   ...DEFI_TOOLS,         // 6 — get_portfolio, estimate_swap, swap_tokens, send_token, analyze_wallet, get_defi_yields
   ...AUTOMATION_TOOLS,   // 6 — create, list, pause, delete, get_runs, run
-  ...SWARM_TOOLS,        // 6 — start, stop, status, research, trigger_agent, brief
+  ...SWARM_TOOLS,        // 6 — stop, status, research, trigger_agent, brief, synthesize (start_swarm is internal)
   ...FRAMEWORK_TOOLS,    // 3 — list_playbooks, run_playbook, get_noel_ledger
-  ...VAULT_TOOLS,        // 12 — save, read, list, search, history, diff, export, store_credential, get_credential, pin, delete, tag
+  ...VAULT_TOOLS,        // 14 — save, read, list, search, history, diff, export, store_credential, get_credential, pin, delete, tag, link, related
   ...WALLET_TOOLS,       // 2 — get_wallet_address, set_telegram
   ...MIROSHARK_TOOLS,    // 3 — simulate, status, stop
   ...HUMANIZER_TOOLS,    // 3 — humanize_text, write_thread, write_post
-  ...AGENT_TOOLS,        // 2 — list_agents, hire_agent
+  ...AGENT_TOOLS,        // 5 — list_agents, hire_agent, agent_spawn, agent_recall, agent_update
   ...SCANNER_TOOLS,      // 4 — score_token, check_token, scan_dips, scan_momentum
   ...CODER_TOOLS,        // 5 — generate_contract, audit_contract, explain_code, review_code, generate_mcp_skill
   ...BASE_TOOLS,         // 4 — query_vaults, list_markets, prepare_deposit, chain_stats
   ...MEMORY_TOOLS,       // 9 — memory_add, memory_search, memory_context, memory_profile, memory_list, memory_delete, memory_insight, memory_extract, memory_consolidate
   ...OS_TOOLS,           // 3 — noel_status, noel_boot, noel_shutdown
   ...RESEARCH_TOOLS,     // 2 — web_scrape, web_search
-  ...MONITOR_TOOLS,      // 3 — create_monitor, list_monitors, cancel_monitor
-  // total: 81
+  ...MONITOR_TOOLS,      // 4 — schedule_research, create_monitor (alias), list_monitors, cancel_monitor
+  // total: 87 (vault +2: link, related · agents +3: spawn, recall, update)
 ];
 
 // Build O(1) dispatch map at startup — avoids sequential chained awaits per call
@@ -67,6 +67,7 @@ export const HANDLER_MAP = new Map<string, Handler>([
   ...DEFI_TOOLS.map(t        => [t.name, handleDefiTool]        as [string, Handler]),
   ...AUTOMATION_TOOLS.map(t  => [t.name, handleAutomationTool]  as [string, Handler]),
   ...SWARM_TOOLS.map(t       => [t.name, handleSwarmTool]       as [string, Handler]),
+  ["start_swarm",              handleSwarmTool], // internal — not listed in tools, kept for backward compat
   ...FRAMEWORK_TOOLS.map(t   => [t.name, handleFrameworkTool]   as [string, Handler]),
   ...VAULT_TOOLS.map(t       => [t.name, handleVaultTool]       as [string, Handler]),
   ...WALLET_TOOLS.map(t      => [t.name, handleWalletTool]      as [string, Handler]),

@@ -8,7 +8,10 @@ export type ChatMessage = { role: "user" | "assistant"; content: string };
 
 /**
  * Call the best available LLM.
- * Priority: ANTHROPIC_API_KEY → BANKR_API_KEY → Convex backend (owner pays)
+ * Priority: BANKR_API_KEY → ANTHROPIC_API_KEY → Convex backend (owner pays)
+ *
+ * Model selection (first wins):
+ *   NOELCLAW_MODEL → BANKR_MODEL / ANTHROPIC_MODEL → "claude-haiku-4-5-20251001"
  */
 export async function callLLM(
   systemPrompt: string,
@@ -17,11 +20,11 @@ export async function callLLM(
   history: ChatMessage[] = [],
   timeoutMs = 60_000,
 ): Promise<string> {
+  const bankrKey     = process.env.BANKR_API_KEY;
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  const bankrKey = process.env.BANKR_API_KEY;
 
+  if (bankrKey)     return callBankr(bankrKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs);
   if (anthropicKey) return callAnthropic(anthropicKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs);
-  if (bankrKey) return callBankr(bankrKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs);
 
   // Fallback: route through Convex backend — owner covers cost
   return callViaConvex(systemPrompt, userPrompt, history, timeoutMs);
@@ -79,7 +82,7 @@ async function callAnthropic(
   timeoutMs: number,
 ): Promise<string> {
   const messages: ChatMessage[] = [...history, { role: "user", content: userPrompt }];
-  const model = process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5-20251001";
+  const model = process.env.NOELCLAW_MODEL ?? process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5-20251001";
 
   const res = await fetch(ANTHROPIC_URL, {
     method: "POST",
@@ -109,7 +112,7 @@ async function callBankr(
   history: ChatMessage[],
   timeoutMs: number,
 ): Promise<string> {
-  const model = process.env.BANKR_MODEL ?? "claude-haiku-4.5";
+  const model = process.env.NOELCLAW_MODEL ?? process.env.BANKR_MODEL ?? "claude-haiku-4-5-20251001";
 
   const res = await fetch(BANKR_URL, {
     method: "POST",

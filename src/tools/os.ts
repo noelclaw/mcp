@@ -5,6 +5,19 @@ import { ToolResult } from "../types.js";
 import { fetchMarketSnapshot } from "./market.js";
 import { searchSupermemory } from "./memory.js";
 
+async function fetchFearGreed(): Promise<{ score: number; label: string; emoji: string } | null> {
+  try {
+    const res = await fetch("https://api.alternative.me/fng/?limit=1", { signal: AbortSignal.timeout(6_000) });
+    if (!res.ok) return null;
+    const data = await res.json() as any;
+    const val = data?.data?.[0];
+    if (!val) return null;
+    const score = parseInt(val.value ?? "0");
+    const emoji = score >= 75 ? "😈" : score >= 55 ? "😏" : score >= 45 ? "😐" : score >= 25 ? "😰" : "🫨";
+    return { score, label: val.value_classification, emoji };
+  } catch { return null; }
+}
+
 export const OS_TOOLS: Tool[] = [
   {
     name: "noel_status",
@@ -17,9 +30,9 @@ export const OS_TOOLS: Tool[] = [
   {
     name: "noel_boot",
     description:
-      "Boot sequence for the Noelclaw AI OS — starts the swarm, loads live market prices, checks active automations, " +
+      "Boot sequence for the Noelclaw AI OS — starts the swarm, loads live data, checks active automations, " +
       "and returns a unified briefing. One command to wake up the entire operating system. " +
-      "Run this first to prime the system before any trading or research session.",
+      "Run this first to prime Noel before a session.",
     inputSchema: {
       type: "object",
       properties: {
@@ -35,7 +48,7 @@ export const OS_TOOLS: Tool[] = [
     name: "noel_shutdown",
     description:
       "Clean shutdown of the Noelclaw AI OS — stops the swarm, saves a session summary to vault, and returns a final briefing. " +
-      "Run at the end of a trading or research session to persist all findings before signing off.",
+      "Run at the end of any session to persist findings before signing off.",
     inputSchema: {
       type: "object",
       properties: {
@@ -122,25 +135,29 @@ export async function handleOsTool(name: string, args: unknown): Promise<ToolRes
       if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
       const { focus } = parsed.data;
 
-      const [swarmRes, marketRes, autoRes, memRes, focusRes, prefRes] = await Promise.allSettled([
+      const [swarmRes, marketRes, fgRes, autoRes, memRes, focusRes, prefRes, vaultRes] = await Promise.allSettled([
         callConvex("/swarm/start", "POST", {}, "start_swarm"),
         fetchMarketSnapshot(),
+        fetchFearGreed(),
         callConvex("/automations/list", "GET", undefined, "list_automations"),
         callConvex("/memory/profile", "GET"),
         focus ? searchSupermemory(focus, 5) : Promise.resolve([] as any[]),
-        // Always load user preference/context memories for smart boot
         searchSupermemory("user preferences style goals priorities", 4),
+        callConvex("/vault/list?type=research&limit=4", "GET", undefined, "noel_boot"),
       ]);
 
-      const swarm    = swarmRes.status   === "fulfilled" ? swarmRes.value   : null;
-      const market   = marketRes.status  === "fulfilled" ? marketRes.value  : null;
-      const autos    = autoRes.status    === "fulfilled" ? autoRes.value    : null;
-      const mem      = memRes.status     === "fulfilled" ? memRes.value     : null;
-      const focusMem = focusRes.status   === "fulfilled" ? focusRes.value as any[] : [];
-      const prefMem  = prefRes.status    === "fulfilled" ? prefRes.value as any[] : [];
+      const swarm    = swarmRes.status  === "fulfilled" ? swarmRes.value  : null;
+      const market   = marketRes.status === "fulfilled" ? marketRes.value : null;
+      const fg       = fgRes.status     === "fulfilled" ? fgRes.value     : null;
+      const autos    = autoRes.status   === "fulfilled" ? autoRes.value   : null;
+      const mem      = memRes.status    === "fulfilled" ? memRes.value    : null;
+      const focusMem = focusRes.status  === "fulfilled" ? focusRes.value as any[] : [];
+      const prefMem  = prefRes.status   === "fulfilled" ? prefRes.value as any[] : [];
+      const vault    = vaultRes.status  === "fulfilled" ? vaultRes.value  : null;
 
       const automations: any[] = autos?.automations ?? [];
-      const activeAutos = automations.filter((a: any) => a.status === "active");
+      const activeAutos  = automations.filter((a: any) => a.status === "active");
+      const vaultEntries: any[] = vault?.entries ?? [];
       const memTotal = mem?.total ?? 0;
       const p = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -152,54 +169,63 @@ export async function handleOsTool(name: string, args: unknown): Promise<ToolRes
         `**Subsystems:**`,
         `  🤖 Swarm        ${swarm?.success ? `✅ Online · session ${swarm.sessionId ?? "active"}` : "⚠️ Could not start"}`,
         `  🧠 Memory       ✅ ${memTotal} memories ready`,
-        `  ⚡ Automations  ${activeAutos.length} active of ${automations.length}`,
+        `  ⚡ Automations  ${activeAutos.length} active${automations.length > activeAutos.length ? ` of ${automations.length} total` : ""}`,
         ``,
       ];
 
       if (market) {
+        const ch = (n: number) => n >= 0 ? `+${n.toFixed(1)}%` : `${n.toFixed(1)}%`;
         lines.push(`**Market Snapshot:**`);
-        lines.push(`  BTC ${p(market.btc)}  ·  ETH ${p(market.eth)}  ·  SOL ${p(market.sol)}`);
-        lines.push("");
+        lines.push(`  BTC ${p(market.btc)}${market.btcChange ? `  (${ch(market.btcChange)})` : ""}  ·  ETH ${p(market.eth)}${market.ethChange ? `  (${ch(market.ethChange)})` : ""}  ·  SOL ${p(market.sol)}${market.solChange ? `  (${ch(market.solChange)})` : ""}`);
+        if (fg) lines.push(`  ${fg.emoji} Fear & Greed: ${fg.score}/100 — ${fg.label}`);
+        lines.push(``);
       }
 
       if (activeAutos.length > 0) {
         lines.push(`**Active Automations:**`);
         for (const a of activeAutos.slice(0, 5)) {
-          const next = a.nextRunAt ? ` · runs ${new Date(a.nextRunAt).toUTCString()}` : "";
-          lines.push(`  • ${a.name}${next}`);
+          const next = a.nextRunAt ? ` · next ${new Date(a.nextRunAt).toUTCString()}` : "";
+          lines.push(`  • ${a.name} (${a.triggerType})${next}`);
         }
-        lines.push("");
+        lines.push(``);
       }
 
-      // Always show user context memories if available
       if (prefMem.length > 0) {
         lines.push(`**User context loaded (${prefMem.length} preferences):**`);
         for (const r of prefMem) {
-          const title = r.metadata?.title ?? r.content.slice(0, 80).replace(/\n/g, " ");
-          lines.push(`  • ${title}`);
+          lines.push(`  • ${(r.metadata?.title ?? r.content.slice(0, 80)).replace(/\n/g, " ")}`);
         }
-        lines.push("");
+        lines.push(``);
       }
 
       if (focus && focusMem.length > 0) {
-        lines.push(`**Memory context for "${focus}" (${focusMem.length} items):**`);
+        lines.push(`**Context for "${focus}" (${focusMem.length} memories):**`);
         for (const r of focusMem) {
-          const title = r.metadata?.title ?? r.content.slice(0, 70).replace(/\n/g, " ");
-          lines.push(`  • ${title}`);
+          lines.push(`  • ${(r.metadata?.title ?? r.content.slice(0, 70)).replace(/\n/g, " ")}`);
         }
-        lines.push("");
+        lines.push(``);
       }
 
-      lines.push(`**Quick actions:**`);
-      lines.push(`  • \`get_swarm_status\` — live readings from all agents`);
+      if (vaultEntries.length > 0) {
+        lines.push(`**Recent swarm research:**`);
+        for (const e of vaultEntries) {
+          lines.push(`  • [${e.agentId ?? "vault"}] ${e.title}`);
+        }
+        lines.push(``);
+      }
+
+      lines.push(`**Quick start:**`);
       if (focus) {
-        lines.push(`  • \`swarm_research topic: "${focus}"\` — deep research session`);
-        lines.push(`  • \`memory_insight topic: "${focus}"\` — full intelligence report`);
+        lines.push(`  • \`swarm_research topic: "${focus}"\` — launch full research swarm`);
+        lines.push(`  • \`swarm_synthesize topic: "${focus}"\` — synthesize what we already know`);
+        lines.push(`  • \`market_thesis token: "${focus}"\` — bull/bear thesis`);
+        lines.push(`  • \`trade_plan token: "${focus}"\` — entry/exit plan`);
       } else {
-        lines.push(`  • \`swarm_research topic: "BTC"\` — start morning research`);
+        lines.push(`  • \`swarm_research topic: "..."\` — deep research on any topic`);
+        lines.push(`  • \`swarm_brief\` — catch up on what agents found last session`);
+        lines.push(`  • \`ask_noel question: "..."\` — ask Noel anything`);
         lines.push(`  • \`noel_status\` — full system dashboard`);
       }
-      lines.push(`  • \`memory_extract text: "...\"\` — auto-save facts from any note`);
 
       return { content: [{ type: "text", text: lines.join("\n") }] };
     }
@@ -209,22 +235,36 @@ export async function handleOsTool(name: string, args: unknown): Promise<ToolRes
       if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
       const { note } = parsed.data;
 
-      const [swarmRes, vaultRes] = await Promise.allSettled([
+      const [swarmRes, vaultRes, autoRes, memRes] = await Promise.allSettled([
         callConvex("/swarm/stop", "POST", {}, "stop_swarm"),
-        callConvex("/vault/list?type=research&limit=5", "GET", undefined, "noel_shutdown"),
+        callConvex("/vault/list?type=research&limit=8", "GET", undefined, "noel_shutdown"),
+        callConvex("/automations/list", "GET", undefined, "noel_shutdown"),
+        callConvex("/memory/profile", "GET"),
       ]);
 
-      const swarm = swarmRes.status === "fulfilled" ? swarmRes.value : null;
-      const vault = vaultRes.status === "fulfilled" ? vaultRes.value : null;
-      const vaultEntries: any[] = vault?.entries ?? [];
+      const swarm  = swarmRes.status === "fulfilled" ? swarmRes.value : null;
+      const vault  = vaultRes.status === "fulfilled" ? vaultRes.value : null;
+      const autos  = autoRes.status  === "fulfilled" ? autoRes.value  : null;
+      const mem    = memRes.status   === "fulfilled" ? memRes.value   : null;
+
+      const vaultEntries: any[]  = vault?.entries ?? [];
+      const automations: any[]   = autos?.automations ?? [];
+      const activeAutos = automations.filter((a: any) => a.status === "active");
+      const memTotal = mem?.total ?? 0;
 
       const now = new Date();
       const sessionKey = `session/shutdown-${now.toISOString().slice(0, 10)}-${now.getHours()}h`;
+
       const summaryContent = [
         `# Session Shutdown — ${now.toUTCString()}`,
         note ? `\nNote: ${note}` : "",
-        `\n## Recent Research`,
-        ...vaultEntries.map((e: any) => `• [${e.agentId ?? "vault"}] ${e.title}`),
+        memTotal > 0 ? `\n## Memory\n${memTotal} total memories` : "",
+        activeAutos.length > 0
+          ? `\n## Active Automations (${activeAutos.length})\n${activeAutos.map((a: any) => `• ${a.name} — ${a.triggerType}`).join("\n")}`
+          : "",
+        vaultEntries.length > 0
+          ? `\n## Research This Session\n${vaultEntries.map((e: any) => `• [${e.agentId ?? "vault"}] ${e.title}`).join("\n")}`
+          : "",
       ].filter(Boolean).join("\n");
 
       await callConvex("/vault/save", "POST", {
@@ -234,7 +274,7 @@ export async function handleOsTool(name: string, args: unknown): Promise<ToolRes
         key: sessionKey,
         agentId: "os",
         tags: ["session", "shutdown"],
-        commitMsg: "noel_shutdown session save",
+        commitMsg: "noel_shutdown",
       }, "noel_shutdown").catch(() => {});
 
       const lines = [
@@ -242,23 +282,34 @@ export async function handleOsTool(name: string, args: unknown): Promise<ToolRes
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
         `${now.toUTCString()}`,
         ``,
-        `🤖 Swarm      ${swarm?.success ? "✅ Stopped" : "⚠️ Already offline"}`,
-        `💾 Session    ✅ Saved to vault: \`${sessionKey}\``,
-        note ? `📝 Note       ${note}` : "",
+        `  🤖 Swarm        ${swarm?.success ? "✅ Stopped" : "⚠️ Already offline"}`,
+        `  🧠 Memory       ${memTotal} memories persisted`,
+        `  ⚡ Automations  ${activeAutos.length} still running in background`,
+        `  💾 Session      Saved → \`${sessionKey}\``,
+        note ? `  📝 Note         ${note}` : "",
         ``,
-      ];
+      ].filter((l): l is string => l !== undefined && l !== "");
 
       if (vaultEntries.length > 0) {
-        lines.push(`**Session research (${vaultEntries.length} entries):**`);
+        lines.push(`**Research this session (${vaultEntries.length} entries):**`);
         for (const e of vaultEntries) {
           lines.push(`  • [${e.agentId ?? "vault"}] ${e.title}`);
         }
-        lines.push("");
+        lines.push(``);
       }
 
-      lines.push(`Run \`noel_boot\` to start a new session.`);
+      if (activeAutos.length > 0) {
+        lines.push(`**Automations continuing while offline:**`);
+        for (const a of activeAutos.slice(0, 5)) {
+          const next = a.nextRunAt ? ` (next: ${new Date(a.nextRunAt).toUTCString()})` : "";
+          lines.push(`  • ${a.name}${next}`);
+        }
+        lines.push(``);
+      }
 
-      return { content: [{ type: "text", text: lines.filter(l => l !== undefined && l !== "").join("\n") }] };
+      lines.push(`Swarm memory + vault persists. Run \`noel_boot\` to resume where you left off.`);
+
+      return { content: [{ type: "text", text: lines.join("\n") }] };
     }
 
     default:

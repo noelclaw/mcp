@@ -6,35 +6,45 @@ import { ToolResult } from "../types.js";
 const TRIGGER_BASE = "https://api.trigger.dev/api/v1";
 const MONITOR_TASK_ID = "noelclaw-monitor";
 
+const MONITOR_INPUT_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    topic:    { type: "string", description: "What to research — topic, keyword, or question" },
+    schedule: {
+      type: "string",
+      description: "Cron expression or preset. Presets: 'daily-8am', 'daily-6pm', 'weekly-monday', 'hourly'. Or raw cron: '0 8 * * *'",
+    },
+    label:    { type: "string", description: "Short label to identify this schedule (e.g. 'morning brief', 'competitor watch')" },
+  },
+  required: ["topic", "schedule"],
+};
+
 export const MONITOR_TOOLS: Tool[] = [
+  {
+    name: "schedule_research",
+    description:
+      "Schedule recurring autonomous research on any topic — runs on a cron schedule, saves findings to vault, " +
+      "and sends a Telegram notification. The agent runs completely on its own with no prompting needed. " +
+      "Requires TRIGGER_SECRET_KEY env var (trigger.dev). " +
+      "Examples: daily morning briefing, weekly competitor analysis, hourly price alerts, monthly industry report.",
+    inputSchema: MONITOR_INPUT_SCHEMA,
+  },
   {
     name: "create_monitor",
     description:
+      "(Alias for schedule_research — prefer schedule_research for new usage.) " +
       "Set up a recurring autonomous monitor — runs on a schedule, researches a topic, saves findings to vault, " +
-      "and sends a Telegram notification. No chat needed: the agent runs completely on its own. " +
-      "Requires TRIGGER_SECRET_KEY env var (trigger.dev). " +
-      "Examples: monitor news on a topic daily, track competitors weekly, get morning briefings.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        topic:    { type: "string", description: "What to monitor — topic, keyword, or research question" },
-        schedule: {
-          type: "string",
-          description: "Cron expression or preset. Presets: 'daily-8am', 'daily-6pm', 'weekly-monday', 'hourly'. Or raw cron: '0 8 * * *'",
-        },
-        label:    { type: "string", description: "Optional: short label to identify this monitor (e.g. 'morning brief', 'competitor watch')" },
-      },
-      required: ["topic", "schedule"],
-    },
+      "and sends a Telegram notification.",
+    inputSchema: MONITOR_INPUT_SCHEMA,
   },
   {
     name: "list_monitors",
-    description: "List all active autonomous monitors — shows topic, schedule, next run, and monitor ID.",
+    description: "List all active scheduled research monitors — shows topic, schedule, next run, and monitor ID.",
     inputSchema: { type: "object", properties: {}, required: [] },
   },
   {
     name: "cancel_monitor",
-    description: "Cancel and delete an autonomous monitor by its ID. Use list_monitors to get the ID.",
+    description: "Cancel and delete a scheduled research monitor by its ID. Use list_monitors to get the ID.",
     inputSchema: {
       type: "object",
       properties: {
@@ -89,7 +99,7 @@ function resolveCron(input: string): string {
 }
 
 export async function handleMonitorTool(name: string, args: unknown): Promise<ToolResult | null> {
-  if (name === "create_monitor") {
+  if (name === "schedule_research" || name === "create_monitor") {
     const parsed = CreateSchema.safeParse(args);
     if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
     const key = getKey();

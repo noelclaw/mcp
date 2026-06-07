@@ -62,10 +62,11 @@ async function main() {
   divider();
   process.stderr.write(`\n`);
 
-  const aiMode = process.env.ANTHROPIC_API_KEY
-    ? `Anthropic  ${C.dim}claude-haiku-4.5${C.reset}`
-    : process.env.BANKR_API_KEY
-    ? `Bankr  ${C.dim}claude-haiku-4.5${C.reset}`
+  const model   = process.env.NOELCLAW_MODEL ?? "claude-haiku-4-5-20251001";
+  const aiMode  = process.env.BANKR_API_KEY
+    ? `Bankr  ${C.dim}${model}${C.reset}`
+    : process.env.ANTHROPIC_API_KEY
+    ? `Anthropic  ${C.dim}${model}${C.reset}`
     : `Noelclaw  ${C.dim}proxy · auto-auth${C.reset}`;
 
   line("version", `v3.3.0  ${C.dim}MCP protocol 2.1.0${C.reset}`);

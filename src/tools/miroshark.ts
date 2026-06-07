@@ -291,7 +291,7 @@ export async function handleMirosharkTool(name: string, args: unknown): Promise<
 
         // Generate AI brief from agent activity
         let brief = "";
-        if (actions.length > 0 && (process.env.ANTHROPIC_API_KEY || process.env.BANKR_API_KEY)) {
+        if (actions.length > 0 && (process.env.BANKR_API_KEY || process.env.ANTHROPIC_API_KEY)) {
           const activitySummary = actions.slice(0, 30).map((act: any) => {
             const who = act.agent_name ?? act.agent_id ?? "agent";
             const what = act.action_type ?? act.type ?? "action";

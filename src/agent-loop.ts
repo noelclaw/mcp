@@ -3,8 +3,11 @@ import { callLLM, type ChatMessage } from "./llm.js";
 import { callConvex } from "./convex.js";
 
 const SYSTEM_PROMPT =
-  "You are Noelclaw, a persistent AI with 76 tools covering memory, automations, DeFi execution, research, and code. " +
-  "Be concise and direct. Use tools when needed. Summarize tool results in plain English.";
+  "You are Noelclaw, a persistent AI OS with 82 tools covering memory, research, web search, automations, code, and DeFi. " +
+  "Be concise and direct. Use tools when needed. Summarize tool results in plain English. " +
+  "For deep research: use swarm_research to launch agents, then swarm_synthesize for a consolidated report. " +
+  "For live web info: use web_search. For market questions: use get_market_data or market_thesis. " +
+  "Always save important findings to vault.";
 
 export type AgentResult = {
   text: string;
@@ -16,11 +19,11 @@ export async function runAgent(
   history: ChatMessage[],
   onToolCall: (name: string) => void,
 ): Promise<AgentResult> {
+  const bankrKey     = process.env.BANKR_API_KEY;
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  const bankrKey = process.env.BANKR_API_KEY;
 
+  if (bankrKey)     return runBankrLoop(bankrKey, userMessage, history, onToolCall);
   if (anthropicKey) return runAnthropicLoop(anthropicKey, userMessage, history, onToolCall);
-  if (bankrKey) return runBankrLoop(bankrKey, userMessage, history, onToolCall);
 
   // No direct key — proxy through Noelclaw backend. Wallet auto-creates at ~/.noelclaw/wallet.json
   // on first use and signs requests transparently. No account or config needed.
@@ -49,7 +52,7 @@ async function runAnthropicLoop(
   history: ChatMessage[],
   onToolCall: (name: string) => void,
 ): Promise<AgentResult> {
-  const model = process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5-20251001";
+  const model = process.env.NOELCLAW_MODEL ?? process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5-20251001";
   const tools = ALL_TOOLS.map(toAnthropicTool);
   const toolCalls: Array<{ name: string }> = [];
 
@@ -120,7 +123,7 @@ async function runConvexProxiedLoop(
   history: ChatMessage[],
   onToolCall: (name: string) => void,
 ): Promise<AgentResult> {
-  const model = process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5-20251001";
+  const model = process.env.NOELCLAW_MODEL ?? process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5-20251001";
   const tools = ALL_TOOLS.map(toAnthropicTool);
   const toolCalls: Array<{ name: string }> = [];
 
@@ -194,7 +197,7 @@ async function runBankrLoop(
   history: ChatMessage[],
   onToolCall: (name: string) => void,
 ): Promise<AgentResult> {
-  const model = process.env.BANKR_MODEL ?? "grok-3";
+  const model = process.env.NOELCLAW_MODEL ?? process.env.BANKR_MODEL ?? "claude-haiku-4-5-20251001";
   const tools = ALL_TOOLS.map(toBankrTool);
   const toolCalls: Array<{ name: string }> = [];
 
