@@ -21,6 +21,7 @@ import { OS_TOOLS, handleOsTool } from "./tools/os.js";
 import { RESEARCH_TOOLS, handleResearchTool } from "./tools/research.js";
 import { MONITOR_TOOLS, handleMonitorTool } from "./tools/monitor.js";
 import { GITHUB_TOOLS, handleGithubTool } from "./tools/github.js";
+import { getTier, PREMIUM_TOOLS, tokenGateError } from "./token-gate.js";
 
 const PRIVATE_KEY_RESPONSE = {
   content: [{
@@ -98,6 +99,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   if (containsSensitiveRequest(args)) return PRIVATE_KEY_RESPONSE;
+
+  if (PREMIUM_TOOLS.has(name)) {
+    const tier = await getTier();
+    if (tier === "basic") return tokenGateError(name);
+  }
 
   const handler = HANDLER_MAP.get(name);
   if (!handler) {
