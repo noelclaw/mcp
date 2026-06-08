@@ -9,56 +9,143 @@
 <style>
   *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
+  /* ── CSS variables — dark (default) ──────────────────────────────────────── */
+  :root {
+    --bg-page-a:    #1a0533;
+    --bg-page-b:    #0a0a0f;
+    --bg-titlebar:  linear-gradient(180deg, #3a3a3a 0%, #2d2d2d 100%);
+    --bg-terminal:  #141414;
+    --border-win:   rgba(255,255,255,0.10);
+    --border-tb:    rgba(0,0,0,0.4);
+    --title-color:  #8a8a8a;
+
+    --c-text:       #e2e2e2;
+    --c-output:     #888;
+    --c-user:       #50fa7b;
+    --c-at:         #44475a;
+    --c-host:       #6272a4;
+    --c-path:       #8be9fd;
+    --c-sym:        #44475a;
+    --c-cmd:        #f8f8f2;
+    --c-flag:       #ffb86c;
+    --c-value:      #ff79c6;
+    --c-ok:         #50fa7b;
+    --c-blue:       #8be9fd;
+    --c-purple:     #bd93f9;
+    --c-dim:        #444;
+    --c-label:      #555;
+    --c-kvalue:     #ccc;
+    --c-cursor:     #f8f8f2;
+    --c-divider:    #333;
+    --c-divider-ln: #2a2a2a;
+    --c-tagline-bg: rgba(189,147,249,0.06);
+    --c-tagline-bd: rgba(189,147,249,0.12);
+    --c-tagline-ft: #888;
+    --c-tagline-em: #bd93f9;
+    --c-tagline-sm: #555;
+  }
+
+  /* ── Light theme ─────────────────────────────────────────────────────────── */
+  html.light {
+    --bg-page-a:    #ede8f5;
+    --bg-page-b:    #f3f3f5;
+    --bg-titlebar:  linear-gradient(180deg, #dcdcdc 0%, #cecece 100%);
+    --bg-terminal:  #fafafa;
+    --border-win:   rgba(0,0,0,0.12);
+    --border-tb:    rgba(0,0,0,0.10);
+    --title-color:  #777;
+
+    --c-text:       #1a1a1a;
+    --c-output:     #555;
+    --c-user:       #16803c;
+    --c-at:         #999;
+    --c-host:       #5a6a8a;
+    --c-path:       #0369a1;
+    --c-sym:        #999;
+    --c-cmd:        #1a1a1a;
+    --c-flag:       #b45309;
+    --c-value:      #be185d;
+    --c-ok:         #16803c;
+    --c-blue:       #0369a1;
+    --c-purple:     #7c3aed;
+    --c-dim:        #bbb;
+    --c-label:      #aaa;
+    --c-kvalue:     #333;
+    --c-cursor:     #1a1a1a;
+    --c-divider:    #bbb;
+    --c-divider-ln: #e0e0e0;
+    --c-tagline-bg: rgba(124,58,237,0.04);
+    --c-tagline-bd: rgba(124,58,237,0.12);
+    --c-tagline-ft: #555;
+    --c-tagline-em: #7c3aed;
+    --c-tagline-sm: #aaa;
+  }
+
+  /* ── Page background ─────────────────────────────────────────────────────── */
   body {
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: radial-gradient(ellipse at 30% 40%, #1a0533 0%, #0a0a0f 60%);
+    background: radial-gradient(ellipse at 30% 40%, var(--bg-page-a) 0%, var(--bg-page-b) 60%);
     font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', Menlo, monospace;
+    transition: background 0.4s ease;
+    position: relative;
   }
 
-  /* ── Window chrome ──────────────────────────────────────────────────────── */
+  /* ── Theme toggle ────────────────────────────────────────────────────────── */
+  .toggle {
+    position: fixed;
+    top: 18px;
+    right: 18px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid rgba(128,128,128,0.25);
+    background: rgba(128,128,128,0.10);
+    color: var(--c-output);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    backdrop-filter: blur(8px);
+    transition: background 0.2s, transform 0.2s;
+    z-index: 10;
+  }
+  .toggle:hover { background: rgba(128,128,128,0.20); transform: scale(1.08); }
 
+  /* ── Window ──────────────────────────────────────────────────────────────── */
   .window {
     width: 740px;
     border-radius: 14px;
     overflow: hidden;
     box-shadow:
-      0 0 0 0.5px rgba(255,255,255,0.10),
-      0 2px 4px rgba(0,0,0,0.3),
-      0 12px 40px rgba(0,0,0,0.6),
-      0 40px 100px rgba(0,0,0,0.5),
-      0 0 80px rgba(130,80,255,0.06);
+      0 0 0 0.5px var(--border-win),
+      0 2px 4px rgba(0,0,0,0.18),
+      0 12px 40px rgba(0,0,0,0.28),
+      0 40px 80px rgba(0,0,0,0.18);
+    transition: box-shadow 0.4s ease;
   }
 
+  /* ── Title bar ───────────────────────────────────────────────────────────── */
   .titlebar {
-    background: linear-gradient(180deg, #3a3a3a 0%, #2d2d2d 100%);
+    background: var(--bg-titlebar);
     height: 40px;
     display: flex;
     align-items: center;
     padding: 0 16px;
     position: relative;
-    border-bottom: 1px solid rgba(0,0,0,0.4);
+    border-bottom: 1px solid var(--border-tb);
     user-select: none;
   }
 
-  .buttons {
-    display: flex;
-    gap: 8px;
-    position: absolute;
-    left: 16px;
-  }
+  .buttons { display: flex; gap: 8px; position: absolute; left: 16px; }
 
   .btn {
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0;
-    transition: filter 0.15s;
     position: relative;
   }
   .btn::after {
@@ -66,69 +153,61 @@
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    background: rgba(0,0,0,0.15);
+    background: rgba(0,0,0,0.12);
   }
-  .close    { background: #ff5f57; box-shadow: 0 0 0 0.5px rgba(0,0,0,0.2); }
-  .minimize { background: #febc2e; box-shadow: 0 0 0 0.5px rgba(0,0,0,0.2); }
-  .maximize { background: #28c840; box-shadow: 0 0 0 0.5px rgba(0,0,0,0.2); }
+  .close    { background: #ff5f57; }
+  .minimize { background: #febc2e; }
+  .maximize { background: #28c840; }
 
   .title {
     flex: 1;
     text-align: center;
     font-size: 12px;
     font-weight: 500;
-    color: #8a8a8a;
+    color: var(--title-color);
     letter-spacing: 0.01em;
+    transition: color 0.3s;
   }
 
-  /* ── Terminal body ──────────────────────────────────────────────────────── */
-
+  /* ── Terminal ────────────────────────────────────────────────────────────── */
   .terminal {
-    background: #141414;
+    background: var(--bg-terminal);
     padding: 22px 26px 28px;
-    min-height: 380px;
+    min-height: 390px;
     font-size: 13px;
     line-height: 1.75;
-    color: #e2e2e2;
-    position: relative;
-    /* subtle noise */
-    background-image:
-      url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+    color: var(--c-text);
+    transition: background 0.4s ease, color 0.3s;
   }
 
-  /* ── Prompt ─────────────────────────────────────────────────────────────── */
+  /* ── Prompt ──────────────────────────────────────────────────────────────── */
+  .line    { display: flex; align-items: baseline; white-space: pre; }
+  .p-user  { color: var(--c-user); }
+  .p-at    { color: var(--c-at); }
+  .p-host  { color: var(--c-host); }
+  .p-path  { color: var(--c-path); }
+  .p-sym   { color: var(--c-sym); }
 
-  .line { display: flex; align-items: baseline; white-space: pre; }
+  /* ── Tokens ──────────────────────────────────────────────────────────────── */
+  .t-cmd   { color: var(--c-cmd); }
+  .t-flag  { color: var(--c-flag); }
+  .t-value { color: var(--c-value); }
 
-  .p-user { color: #50fa7b; }
-  .p-at   { color: #44475a; }
-  .p-host { color: #6272a4; }
-  .p-path { color: #8be9fd; }
-  .p-sym  { color: #44475a; }
+  /* ── Output ──────────────────────────────────────────────────────────────── */
+  .output  { color: var(--c-output); padding-left: 1px; white-space: pre; }
+  .k-label { color: var(--c-label); }
+  .k-value { color: var(--c-kvalue); }
+  .k-ok    { color: var(--c-ok); }
+  .k-dim   { color: var(--c-dim); }
+  .k-blue  { color: var(--c-blue); }
+  .k-purple{ color: var(--c-purple); }
 
-  /* ── Command tokens ─────────────────────────────────────────────────────── */
-
-  .t-cmd   { color: #f8f8f2; }
-  .t-flag  { color: #ffb86c; }
-  .t-value { color: #ff79c6; }
-
-  /* ── Output ─────────────────────────────────────────────────────────────── */
-
-  .output  { color: #888; padding-left: 1px; white-space: pre; }
-  .k-label { color: #555; }
-  .k-value { color: #ccc; }
-  .k-ok    { color: #50fa7b; }
-  .k-dim   { color: #444; }
-  .k-blue  { color: #8be9fd; }
-  .k-purple{ color: #bd93f9; }
-
-  /* ── Cursor ─────────────────────────────────────────────────────────────── */
-
+  /* ── Cursor ──────────────────────────────────────────────────────────────── */
   .cursor {
     display: inline-block;
     width: 7px;
     height: 14px;
-    background: #f8f8f2;
+    background: var(--c-cursor);
     margin-left: 1px;
     vertical-align: -2px;
     border-radius: 1px;
@@ -136,14 +215,13 @@
   }
   @keyframes blink { 50% { opacity: 0; } }
 
-  /* ── Divider ────────────────────────────────────────────────────────────── */
-
+  /* ── Divider ─────────────────────────────────────────────────────────────── */
   .divider {
     display: flex;
     align-items: center;
     gap: 10px;
     margin: 10px 0 8px;
-    color: #333;
+    color: var(--c-divider);
     font-size: 11px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -152,30 +230,31 @@
     content: '';
     flex: 1;
     height: 1px;
-    background: linear-gradient(90deg, transparent, #2a2a2a, transparent);
+    background: var(--c-divider-ln);
   }
 
-  /* ── Tagline ────────────────────────────────────────────────────────────── */
-
+  /* ── Tagline ─────────────────────────────────────────────────────────────── */
   .tagline {
     margin-top: 18px;
-    padding: 14px 16px;
+    padding: 13px 16px;
     border-radius: 8px;
-    background: rgba(189,147,249,0.06);
-    border: 1px solid rgba(189,147,249,0.12);
+    background: var(--c-tagline-bg);
+    border: 1px solid var(--c-tagline-bd);
     font-size: 13px;
-    color: #888;
+    color: var(--c-tagline-ft);
     opacity: 0;
     transform: translateY(6px);
-    transition: opacity 0.8s ease, transform 0.8s ease;
+    transition: opacity 0.8s ease, transform 0.8s ease, background 0.4s, border-color 0.4s, color 0.3s;
     line-height: 1.5;
   }
-  .tagline em  { color: #bd93f9; font-style: normal; font-weight: 600; }
-  .tagline span { color: #555; font-size: 11px; display: block; margin-top: 4px; }
+  .tagline em   { color: var(--c-tagline-em); font-style: normal; font-weight: 600; }
+  .tagline span { color: var(--c-tagline-sm); font-size: 11px; display: block; margin-top: 4px; }
   .tagline.show { opacity: 1; transform: translateY(0); }
 </style>
 </head>
 <body>
+
+<button class="toggle" id="themeBtn" title="Toggle theme">🌙</button>
 
 <div class="window">
   <div class="titlebar">
@@ -190,55 +269,68 @@
 </div>
 
 <script>
-const T = document.getElementById('t');
+// ── Theme ─────────────────────────────────────────────────────────────────────
 
-// ── DOM helpers ───────────────────────────────────────────────────────────────
+const html = document.documentElement;
+const btn  = document.getElementById('themeBtn');
 
-const el = (tag, cls, html) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (html != null) e.innerHTML = html;
-  return e;
-};
+function getInitialTheme() {
+  const param = new URLSearchParams(location.search).get('theme');
+  if (param === 'light' || param === 'dark') return param;
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
 
+let theme = getInitialTheme();
+
+function applyTheme(t) {
+  theme = t;
+  html.classList.toggle('light', t === 'light');
+  btn.textContent = t === 'light' ? '🌙' : '☀️';
+}
+
+btn.addEventListener('click', () => applyTheme(theme === 'dark' ? 'light' : 'dark'));
+
+// Listen for postMessage from parent (for iframe embedding)
+window.addEventListener('message', e => {
+  if (e.data?.theme === 'light' || e.data?.theme === 'dark') applyTheme(e.data.theme);
+});
+
+applyTheme(theme);
+
+// ── Terminal engine ───────────────────────────────────────────────────────────
+
+const T     = document.getElementById('t');
+const el    = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// ── Prompt line ───────────────────────────────────────────────────────────────
-
-function mkPromptLine() {
+function mkPrompt() {
   const line = el('div', 'line');
   line.innerHTML =
     `<span class="p-user">noel</span>` +
     `<span class="p-at">@</span>` +
-    `<span class="p-host">macbook</span>` +
+    `<span class="p-host">noelclaw</span>` +
     `<span class="p-path"> ~</span>` +
     `<span class="p-sym"> % </span>`;
   return line;
 }
 
-// ── Tokenize command for colored output ───────────────────────────────────────
-
 function tokenize(text) {
-  const out = [];
-  // split on spaces but keep them
-  const parts = text.split(/( +)/);
+  const tokens = [];
   let first = true;
-  for (const p of parts) {
+  for (const p of text.split(/( +)/)) {
     if (!p) continue;
-    if (/^ +$/.test(p)) { out.push({ cls: 't-cmd', text: p }); continue; }
-    if (first) { out.push({ cls: 't-cmd', text: p }); first = false; continue; }
+    if (/^ +$/.test(p)) { tokens.push({ cls: 't-cmd', text: p }); continue; }
+    if (first) { tokens.push({ cls: 't-cmd', text: p }); first = false; continue; }
     const eq = p.indexOf('=');
     if (eq > 0 && /^[a-zA-Z_]/.test(p)) {
-      out.push({ cls: 't-flag',  text: p.slice(0, eq + 1) });
-      out.push({ cls: 't-value', text: p.slice(eq + 1) });
+      tokens.push({ cls: 't-flag',  text: p.slice(0, eq + 1) });
+      tokens.push({ cls: 't-value', text: p.slice(eq + 1) });
     } else {
-      out.push({ cls: 't-flag', text: p });
+      tokens.push({ cls: 't-flag', text: p });
     }
   }
-  return out;
+  return tokens;
 }
-
-// ── Type a command char by char ───────────────────────────────────────────────
 
 async function typeCmd(line, text, speed = 46) {
   for (const tok of tokenize(text)) {
@@ -251,46 +343,36 @@ async function typeCmd(line, text, speed = 46) {
   }
 }
 
-// ── Output helpers ────────────────────────────────────────────────────────────
-
 const out   = (html, cls = 'output') => { const d = el('div', cls, html); T.appendChild(d); return d; };
 const blank = () => out('');
-
-// ── Row: "  Label   value" ────────────────────────────────────────────────────
-
-const row = (label, value, valCls = 'k-value') =>
+const row   = (label, value, valCls = 'k-value') =>
   out(`  <span class="k-label">${label.padEnd(8)}</span>  <span class="${valCls}">${value}</span>`);
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+async function pressEnter(line) {
+  const c = el('span', 'cursor');
+  line.appendChild(c);
+  await sleep(240);
+  c.remove();
+  await sleep(600);
+}
+
+// ── Animation ─────────────────────────────────────────────────────────────────
 
 async function run() {
   T.innerHTML = '';
-
   await sleep(700);
 
-  // ── PROMPT 1 — idle ───────────────────────────────────────────────────────
+  // ── Session 1 ─────────────────────────────────────────────────────────────
 
-  const p1 = mkPromptLine();
-  const cur1 = el('span', 'cursor');
-  p1.appendChild(cur1);
+  const p1 = mkPrompt();
+  const c1 = el('span', 'cursor');
+  p1.appendChild(c1);
   T.appendChild(p1);
-
   await sleep(1500);
-  cur1.remove();
+  c1.remove();
 
-  // type command
-  await typeCmd(p1,
-    'agent_spawn name="market-researcher" goal="track AI infrastructure weekly"'
-  );
-
-  // fake press enter
-  const enterCur = el('span', 'cursor');
-  p1.appendChild(enterCur);
-  await sleep(260);
-  enterCur.remove();
-  await sleep(600);
-
-  // ── OUTPUT — spawn result ─────────────────────────────────────────────────
+  await typeCmd(p1, 'agent_spawn name="market-researcher" goal="track AI infrastructure weekly"');
+  await pressEnter(p1);
 
   blank();
   out('🤖  <span class="k-ok" style="font-weight:600">Agent spawned.</span>');
@@ -303,41 +385,29 @@ async function run() {
   row('Status', '● active', 'k-ok');
   blank();
   await sleep(80);
-  out(
-    '  <span class="k-dim">Recall anytime ›</span>  ' +
-    '<span class="k-blue">agent_recall name="market-researcher"</span>'
-  );
+  out('  <span class="k-dim">Recall anytime ›</span>  <span class="k-blue">agent_recall name="market-researcher"</span>');
   blank();
 
   await sleep(2400);
 
-  // ── DIVIDER ───────────────────────────────────────────────────────────────
+  // ── Divider ───────────────────────────────────────────────────────────────
 
   const div = el('div', 'divider');
   div.textContent = '2 days later';
   T.appendChild(div);
-
   await sleep(900);
 
-  // ── PROMPT 2 ──────────────────────────────────────────────────────────────
+  // ── Session 2 ─────────────────────────────────────────────────────────────
 
-  const p2 = mkPromptLine();
-  const cur2 = el('span', 'cursor');
-  p2.appendChild(cur2);
+  const p2 = mkPrompt();
+  const c2 = el('span', 'cursor');
+  p2.appendChild(c2);
   T.appendChild(p2);
-
   await sleep(1100);
-  cur2.remove();
+  c2.remove();
 
   await typeCmd(p2, 'agent_recall name="market-researcher"');
-
-  const enterCur2 = el('span', 'cursor');
-  p2.appendChild(enterCur2);
-  await sleep(260);
-  enterCur2.remove();
-  await sleep(700);
-
-  // ── OUTPUT — recall result ────────────────────────────────────────────────
+  await pressEnter(p2);
 
   blank();
   out('<span class="k-purple" style="font-weight:600">## Agent: market-researcher</span>');
@@ -354,16 +424,15 @@ async function run() {
 
   await sleep(1600);
 
-  // ── IDLE PROMPT ───────────────────────────────────────────────────────────
+  // ── Idle prompt ───────────────────────────────────────────────────────────
 
-  const p3 = mkPromptLine();
-  const cur3 = el('span', 'cursor');
-  p3.appendChild(cur3);
+  const p3 = mkPrompt();
+  const c3 = el('span', 'cursor');
+  p3.appendChild(c3);
   T.appendChild(p3);
-
   await sleep(1400);
 
-  // ── TAGLINE ───────────────────────────────────────────────────────────────
+  // ── Tagline ───────────────────────────────────────────────────────────────
 
   const tl = el('div', 'tagline');
   tl.innerHTML =
@@ -373,9 +442,9 @@ async function run() {
   await sleep(80);
   tl.classList.add('show');
 
-  // ── LOOP after 4s ─────────────────────────────────────────────────────────
+  // ── Loop ──────────────────────────────────────────────────────────────────
 
-  await sleep(4500);
+  await sleep(4800);
   await run();
 }
 
