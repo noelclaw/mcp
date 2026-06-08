@@ -48,7 +48,7 @@ async function main() {
     { label: "Wallet",     count: 2,  tools: "get_wallet_address · set_telegram" },
     { label: "MiroShark",  count: 3,  tools: "simulate · status · stop" },
     { label: "Scanner",    count: 3,  tools: "scan_market · score_token · check_token" },
-    { label: "Agents",     count: 2,  tools: "list_agents · hire_agent" },
+    { label: "Agents",     count: 7,  tools: "list_agents · hire_agent · agent_spawn · agent_recall · agent_update · agent_identity · agent_ledger" },
     { label: "Social",     count: 2,  tools: "humanize_text · write_content" },
     { label: "Coder",      count: 5,  tools: "generate_contract · audit_contract · explain_code · review_code · generate_mcp_skill" },
     { label: "Base",       count: 4,  tools: "query_vaults · list_markets · prepare_deposit · chain_stats" },
@@ -73,7 +73,7 @@ async function main() {
     ? `Anthropic  ${C.dim}${model}${C.reset}`
     : `Noelclaw  ${C.dim}proxy · auto-auth${C.reset}`;
 
-  line("version", `v3.7.0  ${C.dim}MCP protocol 2.1.0${C.reset}`);
+  line("version", `v3.8.0  ${C.dim}MCP protocol 2.1.0${C.reset}`);
   line("ai",       aiMode);
   line("tools",    `${C.white}${C.bold}${total} tools loaded${C.reset}  ${C.dim}across ${categories.length} categories${C.reset}`);
 
@@ -102,7 +102,7 @@ async function main() {
     process.stderr.write(`\n`);
     line("wallet",  wallet.address);
     if (hasAuth) {
-      line("auth",   `${C.green}signed in${C.reset}  ${C.dim}all 96 tools unlocked${C.reset}`, C.green);
+      line("auth",   `${C.green}signed in${C.reset}  ${C.dim}all 98 tools unlocked${C.reset}`, C.green);
     } else {
       line("auth",   `${C.yellow}not signed in${C.reset}  ${C.dim}run 'noelclaw login' to unlock premium tools${C.reset}`, C.yellow);
     }

@@ -101,6 +101,27 @@ export const AGENT_TOOLS: Tool[] = [
       required: ["agentId"],
     },
   },
+  {
+    name: "agent_ledger",
+    description:
+      "View the full activity ledger for a persistent agent — every update, status change, and finding logged in order. " +
+      "Each entry is a vault version created by agent_update. Use this to audit what an agent has done, " +
+      "trace its reasoning, or review progress since spawn.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "Agent name as used in agent_spawn",
+        },
+        limit: {
+          type: "number",
+          description: "Max entries to return (default 20, max 50)",
+        },
+      },
+      required: ["name"],
+    },
+  },
 ];
 
 const HireAgentSchema = z.object({
@@ -271,6 +292,37 @@ export async function handleAgentTool(name: string, args: unknown): Promise<Tool
     const statusEmoji = status === "complete" ? "✅" : status === "blocked" ? "🚫" : "🔄";
     return {
       content: [{ type: "text", text: `${statusEmoji} Agent **${agentName}** updated (v${data.version}).\n\n**Progress:** ${progress}${findings ? `\n**Findings:** ${findings}` : ""}${nextStep ? `\n**Next:** ${nextStep}` : ""}` }],
+    };
+  }
+
+  if (name === "agent_ledger") {
+    const { name: agentName, limit = 20 } = args as { name: string; limit?: number };
+    if (!agentName) return { content: [{ type: "text", text: "name is required" }], isError: true };
+
+    const cap = Math.min(Math.max(1, limit), 50);
+    const data = await callConvex(
+      `/vault/history?key=agent/${encodeURIComponent(agentName)}&limit=${cap}`,
+      "GET", undefined, "vault_history",
+    ) as { versions?: Array<{ version: number; commitMsg?: string; updatedAt?: number }>; error?: string };
+
+    if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
+
+    const versions = data.versions ?? [];
+    if (!versions.length) {
+      return { content: [{ type: "text", text: `No ledger entries found for agent \`${agentName}\`. Spawn it first with \`agent_spawn\`.` }] };
+    }
+
+    const rows = versions.map((v) => {
+      const ts = v.updatedAt ? new Date(v.updatedAt).toUTCString() : "—";
+      const msg = v.commitMsg ?? "(no message)";
+      return `  v${v.version}  ${ts}\n         ${msg}`;
+    });
+
+    return {
+      content: [{
+        type: "text",
+        text: `## Agent Ledger: ${agentName} (${versions.length} entries)\n\n${rows.join("\n\n")}`,
+      }],
     };
   }
 
