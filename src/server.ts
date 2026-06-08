@@ -89,7 +89,7 @@ export const HANDLER_MAP = new Map<string, Handler>([
 ]);
 
 export const server = new Server(
-  { name: "noelclaw", version: "3.5.1" },
+  { name: "noelclaw", version: "3.5.2" },
   { capabilities: { tools: {} } }
 );
 
