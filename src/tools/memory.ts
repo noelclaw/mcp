@@ -154,6 +154,23 @@ export const MEMORY_TOOLS: Tool[] = [
     },
   },
   {
+    name: "memory_publish",
+    description:
+      "Publish a memory snippet to the Memory Marketplace — makes it publicly visible to all Noelclaw users. " +
+      "Great for sharing curated knowledge, useful context, research findings, or prompts. " +
+      "Saved as a public vault entry (type=memory). Once published it appears at /memory-marketplace in the app.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title:      { type: "string",                   description: "Short title for the memory (shown in marketplace)" },
+        content:    { type: "string",                   description: "The memory content to share" },
+        tags:       { type: "array", items: { type: "string" }, description: "Optional tags (e.g. ['DeFi', 'Base', 'research'])" },
+        authorName: { type: "string",                   description: "Display name for the author (defaults to your wallet address)" },
+      },
+      required: ["title", "content"],
+    },
+  },
+  {
     name: "memory_consolidate",
     description:
       "Fetch all memories on a topic and consolidate them into a single comprehensive summary using AI. " +
@@ -481,6 +498,39 @@ export async function handleMemoryTool(name: string, args: unknown): Promise<Too
             data?.summary ?? "",
             ``,
             `Use \`memory_search query: "${topic}"\` to find it.`,
+          ].join("\n"),
+        }],
+      };
+    }
+
+    case "memory_publish": {
+      const { title, content, tags, authorName } = args as {
+        title: string; content: string; tags?: string[]; authorName?: string;
+      };
+      if (!title || !content) return { content: [{ type: "text", text: "title and content are required" }], isError: true };
+
+      const data = await callConvex("/vault/save", "POST", {
+        type:       "memory",
+        title,
+        content,
+        tags:       tags ?? [],
+        isPublic:   true,
+        authorName: authorName ?? "Anonymous",
+        commitMsg:  "published to marketplace",
+      }, "vault_save") as { key?: string; version?: number; error?: string };
+
+      if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
+      return {
+        content: [{
+          type: "text",
+          text: [
+            `🧠 **Memory Published**`,
+            ``,
+            `**Title:** ${title}`,
+            `**Key:** \`${data.key}\``,
+            `**Version:** ${data.version ?? 1}`,
+            ``,
+            `Now visible at the Memory Marketplace in the Noelclaw app.`,
           ].join("\n"),
         }],
       };

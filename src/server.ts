@@ -57,14 +57,14 @@ export const ALL_TOOLS = [
   ...SCANNER_TOOLS,      // 3 — score_token, check_token, scan_market (dips+momentum merged)
   ...CODER_TOOLS,        // 5 — generate_contract, audit_contract, explain_code, review_code, generate_mcp_skill
   ...BASE_TOOLS,         // 4 — query_vaults, list_markets, prepare_deposit, chain_stats
-  ...MEMORY_TOOLS,       // 9 — memory_add, memory_search, memory_context, memory_profile, memory_list, memory_delete, memory_insight, memory_extract, memory_consolidate
+  ...MEMORY_TOOLS,       // 10 — memory_add, memory_search, memory_context, memory_profile, memory_list, memory_delete, memory_insight, memory_extract, memory_consolidate, memory_publish
   ...OS_TOOLS,           // 1 — noel_status
   ...RESEARCH_TOOLS,     // 2 — web_scrape, web_search
   ...MONITOR_TOOLS,      // 4 — schedule_research, create_monitor (alias), list_monitors, cancel_monitor
   ...GITHUB_TOOLS,       // 8 — list_repos, list_prs, get_pr, list_issues, get_issue, get_file, get_commits, search_code
   ...CHRONICLE_TOOLS,    // 2 — chronicle_add, chronicle_list
   ...PACKET_TOOLS,       // 4 — packet_create, packet_run, packet_list, packet_share
-  // total: 98
+  // total: 99
 ];
 
 // Build O(1) dispatch map at startup — avoids sequential chained awaits per call
@@ -95,7 +95,7 @@ export const HANDLER_MAP = new Map<string, Handler>([
 ]);
 
 export const server = new Server(
-  { name: "noelclaw", version: "3.8.0" },
+  { name: "noelclaw", version: "3.9.0" },
   { capabilities: { tools: {} } }
 );
 
