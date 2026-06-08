@@ -53,7 +53,7 @@ export const ALL_TOOLS = [
   ...WALLET_TOOLS,       // 2 — get_wallet_address, set_telegram
   ...MIROSHARK_TOOLS,    // 3 — simulate, status, stop
   ...HUMANIZER_TOOLS,    // 2 — humanize_text, write_content (thread+post merged)
-  ...AGENT_TOOLS,        // 5 — list_agents, hire_agent, agent_spawn, agent_recall, agent_update
+  ...AGENT_TOOLS,        // 6 — list_agents, hire_agent, agent_spawn, agent_recall, agent_update, agent_identity
   ...SCANNER_TOOLS,      // 3 — score_token, check_token, scan_market (dips+momentum merged)
   ...CODER_TOOLS,        // 5 — generate_contract, audit_contract, explain_code, review_code, generate_mcp_skill
   ...BASE_TOOLS,         // 4 — query_vaults, list_markets, prepare_deposit, chain_stats
@@ -64,7 +64,7 @@ export const ALL_TOOLS = [
   ...GITHUB_TOOLS,       // 8 — list_repos, list_prs, get_pr, list_issues, get_issue, get_file, get_commits, search_code
   ...CHRONICLE_TOOLS,    // 2 — chronicle_add, chronicle_list
   ...PACKET_TOOLS,       // 4 — packet_create, packet_run, packet_list, packet_share
-  // total: 96
+  // total: 97
 ];
 
 // Build O(1) dispatch map at startup — avoids sequential chained awaits per call

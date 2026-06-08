@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ethers } from "ethers";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { callConvex } from "../convex.js";
 import { ToolResult } from "../types.js";
@@ -76,6 +77,28 @@ export const AGENT_TOOLS: Tool[] = [
         nextStep: { type: "string", description: "What should happen next (optional — helps on recall)" },
       },
       required: ["name", "progress"],
+    },
+  },
+  {
+    name: "agent_identity",
+    description:
+      "Get or create a persistent on-chain identity (wallet address) for a named agent. " +
+      "Every agent gets a unique Base address that acts as its digital identity — visible in the app, " +
+      "usable for receiving payments, and permanently tied to that agent name. " +
+      "Call once per agent; calling again returns the same address.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentId: {
+          type: "string",
+          description: "Agent ID or name (e.g. 'market-researcher', 'analyst')",
+        },
+        agentName: {
+          type: "string",
+          description: "Human-readable agent name for display (optional)",
+        },
+      },
+      required: ["agentId"],
     },
   },
 ];
@@ -248,6 +271,57 @@ export async function handleAgentTool(name: string, args: unknown): Promise<Tool
     const statusEmoji = status === "complete" ? "✅" : status === "blocked" ? "🚫" : "🔄";
     return {
       content: [{ type: "text", text: `${statusEmoji} Agent **${agentName}** updated (v${data.version}).\n\n**Progress:** ${progress}${findings ? `\n**Findings:** ${findings}` : ""}${nextStep ? `\n**Next:** ${nextStep}` : ""}` }],
+    };
+  }
+
+  if (name === "agent_identity") {
+    const { agentId, agentName } = args as { agentId: string; agentName?: string };
+
+    // Check if identity already exists
+    const existing = await callConvex(
+      `/agents/identity?agentId=${encodeURIComponent(agentId)}`,
+      "GET", undefined, "agent_identity",
+    );
+
+    if (existing?.identity) {
+      const id = existing.identity;
+      return {
+        content: [{
+          type: "text",
+          text: [
+            `🤖 **Agent Identity: \`${agentId}\`**`,
+            ``,
+            `**Address:** \`${id.walletAddress}\``,
+            `**Network:** Base mainnet`,
+            ``,
+            `This address is permanent and tied to this agent.`,
+            `Share it to receive funds · Track spending · Verify agent actions`,
+          ].join("\n"),
+        }],
+      };
+    }
+
+    // Generate new wallet address for the agent
+    const wallet = ethers.Wallet.createRandom();
+    const data = await callConvex("/agents/identity", "POST", {
+      agentId,
+      walletAddress: wallet.address,
+      agentName: agentName ?? agentId,
+    }, "agent_identity");
+
+    return {
+      content: [{
+        type: "text",
+        text: [
+          `🤖 **Agent Identity Created: \`${agentId}\`**`,
+          ``,
+          `**Address:** \`${wallet.address}\``,
+          `**Network:** Base mainnet`,
+          ``,
+          `This identity is now permanently linked to \`${agentId}\`.`,
+          `Visible in the Agents page of your Noelclaw app.`,
+        ].join("\n"),
+      }],
     };
   }
 
