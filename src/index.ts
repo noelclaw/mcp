@@ -54,7 +54,7 @@ async function main() {
     { label: "Memory",     count: 9,  tools: "add · search · context · profile · list · delete · insight · extract · consolidate" },
     { label: "OS",         count: 1,  tools: "noel_status" },
     { label: "Research",   count: 2,  tools: "web_scrape · web_search" },
-    { label: "Monitor",    count: 3,  tools: "create_monitor · list_monitors · cancel_monitor" },
+    { label: "Monitor",    count: 4,  tools: "schedule_research · create_monitor · list_monitors · cancel_monitor" },
     { label: "GitHub",     count: 8,  tools: "list_repos · list_prs · get_pr · list_issues · get_issue · get_file · get_commits · search_code" },
   ];
 
