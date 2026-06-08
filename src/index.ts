@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { startServer, ALL_TOOLS } from "./server.js";
 import { getOrCreateWallet } from "./wallet.js";
+import { getSavedToken } from "./config.js";
 
 // ── ANSI helpers ──────────────────────────────────────────────────────────────
 const C = {
@@ -92,15 +93,22 @@ async function main() {
   // ── Wallet ────────────────────────────────────────────────────────────────
   await startServer();
 
+  const hasAuth = !!getSavedToken();
+
   try {
     const wallet = await getOrCreateWallet();
     process.stderr.write(`\n`);
     line("wallet",  wallet.address);
+    if (hasAuth) {
+      line("auth",   `${C.green}signed in${C.reset}  ${C.dim}all 90 tools unlocked${C.reset}`, C.green);
+    } else {
+      line("auth",   `${C.yellow}not signed in${C.reset}  ${C.dim}run 'noelclaw login' to unlock premium tools${C.reset}`, C.yellow);
+    }
     line("status",  `${C.green}ready${C.reset}  ${C.dim}waiting for MCP client...${C.reset}`, C.green);
     process.stderr.write(`\n`);
   } catch {
     process.stderr.write(`\n`);
-    line("wallet",  `${C.yellow}not configured${C.reset}  ${C.dim}run 'noelclaw-mcp' to init${C.reset}`, C.yellow);
+    line("wallet",  `${C.yellow}not configured${C.reset}  ${C.dim}run 'noelclaw login' to set up${C.reset}`, C.yellow);
     line("status",  `${C.green}ready${C.reset}  ${C.dim}wallet tools require setup${C.reset}`, C.green);
     process.stderr.write(`\n`);
   }

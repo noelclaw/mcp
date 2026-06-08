@@ -1,4 +1,5 @@
 import { getOrCreateWallet, BASE_RPC } from "./wallet.js";
+import { getSavedToken } from "./config.js";
 import type { ToolResult } from "./types.js";
 
 const NOELCLAW_TOKEN = "0x4B524015D54a27d4472F5c59c570730D69499Ba3";
@@ -29,7 +30,7 @@ async function erc20BalanceOf(address: string): Promise<bigint> {
 
 // Session token or API key → always holder (authenticated user)
 function hasAuthBypass(): boolean {
-  return !!(process.env.NOELCLAW_SESSION_TOKEN || process.env.NOELCLAW_API_KEY);
+  return !!(getSavedToken() || process.env.NOELCLAW_API_KEY);
 }
 
 export async function getTier(): Promise<Tier> {

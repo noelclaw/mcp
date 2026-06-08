@@ -1,4 +1,5 @@
 import { signRequest } from "./wallet.js";
+import { getSavedToken } from "./config.js";
 
 const CONVEX_SITE = process.env.NOELCLAW_CONVEX_URL ?? "https://api.noelclaw.com";
 const RETRY_STATUSES = new Set([429, 500, 502, 503, 504]);
@@ -30,9 +31,9 @@ export async function callConvex(path: string, method: string, body?: unknown, t
   const url = `${CONVEX_SITE}${path}`;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
 
-  const apiKey = process.env.NOELCLAW_API_KEY;
-  const sessionToken = process.env.NOELCLAW_SESSION_TOKEN;
-  const authHeader = apiKey
+  const apiKey      = process.env.NOELCLAW_API_KEY;
+  const sessionToken = getSavedToken(); // env var → saved config fallback
+  const authHeader  = apiKey
     ? `Bearer ${apiKey}`
     : sessionToken
     ? `Bearer ${sessionToken}`

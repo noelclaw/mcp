@@ -2,7 +2,52 @@
 import * as readline from "readline";
 import { runAgent } from "./agent-loop.js";
 import { ALL_TOOLS } from "./server.js";
+import { writeConfig, readConfig } from "./config.js";
 import type { ChatMessage } from "./llm.js";
+
+const CONVEX_SITE = process.env.NOELCLAW_CONVEX_URL ?? "https://api.noelclaw.com";
+
+async function loginFlow(): Promise<void> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const ask = (q: string) => new Promise<string>(resolve => rl.question(q, resolve));
+
+  console.log(`\n  ${C.cyan}${C.bold}Sign in to Noelclaw${C.reset}\n`);
+
+  const email = (await ask(`  Email: `)).trim();
+  if (!email) { rl.close(); return; }
+
+  process.stdout.write(`  Sending code to ${email}...`);
+  const sendRes = await fetch(`${CONVEX_SITE}/auth/otp/send`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (!sendRes.ok) {
+    const e = await sendRes.json().catch(() => ({})) as any;
+    console.log(`\n  ${C.red}✗${C.reset} ${e.error ?? "Failed to send code"}\n`);
+    rl.close(); return;
+  }
+  console.log(` ${C.green}✓${C.reset}`);
+
+  const code = (await ask(`  6-digit code: `)).trim();
+  rl.close();
+
+  process.stdout.write(`  Verifying...`);
+  const verifyRes = await fetch(`${CONVEX_SITE}/auth/otp/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, code }),
+  });
+  const data = await verifyRes.json() as any;
+  if (!verifyRes.ok || !data.token) {
+    console.log(`\n  ${C.red}✗${C.reset} ${data.error ?? "Invalid code"}\n`);
+    return;
+  }
+
+  writeConfig({ sessionToken: data.token, email });
+  console.log(`  ${C.green}✓ Logged in as ${email}${C.reset}`);
+  console.log(`  ${C.dim}Token saved to ~/.noelclaw/config.json — all 90 tools unlocked.${C.reset}\n`);
+}
 
 // ── ANSI ─────────────────────────────────────────────────────────────────────
 const C = {
@@ -40,8 +85,10 @@ function spinner(label: string): () => void {
 function printHelp() {
   console.log(`
   ${C.cyan}Commands:${C.reset}
+    /login     Sign in to unlock all 90 tools
+    /logout    Sign out and clear saved token
     /clear     Clear conversation history
-    /tools     List all 74 available tools
+    /tools     List all available tools
     /quit      Exit
 
   ${C.dim}Examples:
@@ -64,7 +111,14 @@ async function main() {
     ? `${C.green}Anthropic${C.reset} ${C.dim}(full tool use)${C.reset}`
     : `${C.green}Noelclaw${C.reset} ${C.dim}(full tool use · auto-wallet)${C.reset}`;
 
-  console.log(`  ${C.dim}Mode:${C.reset} ${mode}\n`);
+  console.log(`  ${C.dim}Mode:${C.reset} ${mode}`);
+
+  const cfg = readConfig();
+  if (cfg.email) {
+    console.log(`  ${C.dim}Signed in as:${C.reset} ${C.green}${cfg.email}${C.reset} ${C.dim}· all tools unlocked${C.reset}\n`);
+  } else {
+    console.log(`  ${C.dim}Not signed in. Run${C.reset} ${C.cyan}/login${C.reset} ${C.dim}to unlock all 90 tools.${C.reset}\n`);
+  }
 
   const history: ChatMessage[] = [];
 
@@ -95,6 +149,21 @@ async function main() {
 
     if (line === "/help") {
       printHelp();
+      rl.prompt();
+      return;
+    }
+
+    if (line === "/login") {
+      rl.pause();
+      await loginFlow();
+      rl.resume();
+      rl.prompt();
+      return;
+    }
+
+    if (line === "/logout") {
+      writeConfig({ sessionToken: undefined, email: undefined });
+      console.log(`  ${C.dim}Logged out. Token cleared from ~/.noelclaw/config.json${C.reset}\n`);
       rl.prompt();
       return;
     }
