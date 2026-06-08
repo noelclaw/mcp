@@ -21,6 +21,7 @@ import { OS_TOOLS, handleOsTool } from "./tools/os.js";
 import { RESEARCH_TOOLS, handleResearchTool } from "./tools/research.js";
 import { MONITOR_TOOLS, handleMonitorTool } from "./tools/monitor.js";
 import { GITHUB_TOOLS, handleGithubTool } from "./tools/github.js";
+import { CHRONICLE_TOOLS, handleChronicle } from "./tools/chronicle.js";
 import { getTier, PREMIUM_TOOLS, tokenGateError } from "./token-gate.js";
 
 const PRIVATE_KEY_RESPONSE = {
@@ -60,7 +61,8 @@ export const ALL_TOOLS = [
   ...RESEARCH_TOOLS,     // 2 — web_scrape, web_search
   ...MONITOR_TOOLS,      // 4 — schedule_research, create_monitor (alias), list_monitors, cancel_monitor
   ...GITHUB_TOOLS,       // 8 — list_repos, list_prs, get_pr, list_issues, get_issue, get_file, get_commits, search_code
-  // total: 90
+  ...CHRONICLE_TOOLS,    // 2 — chronicle_add, chronicle_list
+  // total: 92
 ];
 
 // Build O(1) dispatch map at startup — avoids sequential chained awaits per call
@@ -86,10 +88,11 @@ export const HANDLER_MAP = new Map<string, Handler>([
   ...RESEARCH_TOOLS.map(t    => [t.name, handleResearchTool]     as [string, Handler]),
   ...MONITOR_TOOLS.map(t     => [t.name, handleMonitorTool]      as [string, Handler]),
   ...GITHUB_TOOLS.map(t      => [t.name, handleGithubTool]       as [string, Handler]),
+  ...CHRONICLE_TOOLS.map(t   => [t.name, (n: string, a: unknown) => handleChronicle(n, a as Record<string, unknown>)] as [string, Handler]),
 ]);
 
 export const server = new Server(
-  { name: "noelclaw", version: "3.5.2" },
+  { name: "noelclaw", version: "3.6.0" },
   { capabilities: { tools: {} } }
 );
 
