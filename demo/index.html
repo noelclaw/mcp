@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Noelclaw Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(ellipse at 30% 40%, #1a0533 0%, #0a0a0f 60%);
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', Menlo, monospace;
+  }
+
+  /* ── Window chrome ──────────────────────────────────────────────────────── */
+
+  .window {
+    width: 740px;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 0.5px rgba(255,255,255,0.10),
+      0 2px 4px rgba(0,0,0,0.3),
+      0 12px 40px rgba(0,0,0,0.6),
+      0 40px 100px rgba(0,0,0,0.5),
+      0 0 80px rgba(130,80,255,0.06);
+  }
+
+  .titlebar {
+    background: linear-gradient(180deg, #3a3a3a 0%, #2d2d2d 100%);
+    height: 40px;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    position: relative;
+    border-bottom: 1px solid rgba(0,0,0,0.4);
+    user-select: none;
+  }
+
+  .buttons {
+    display: flex;
+    gap: 8px;
+    position: absolute;
+    left: 16px;
+  }
+
+  .btn {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0;
+    transition: filter 0.15s;
+    position: relative;
+  }
+  .btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.15);
+  }
+  .close    { background: #ff5f57; box-shadow: 0 0 0 0.5px rgba(0,0,0,0.2); }
+  .minimize { background: #febc2e; box-shadow: 0 0 0 0.5px rgba(0,0,0,0.2); }
+  .maximize { background: #28c840; box-shadow: 0 0 0 0.5px rgba(0,0,0,0.2); }
+
+  .title {
+    flex: 1;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 500;
+    color: #8a8a8a;
+    letter-spacing: 0.01em;
+  }
+
+  /* ── Terminal body ──────────────────────────────────────────────────────── */
+
+  .terminal {
+    background: #141414;
+    padding: 22px 26px 28px;
+    min-height: 380px;
+    font-size: 13px;
+    line-height: 1.75;
+    color: #e2e2e2;
+    position: relative;
+    /* subtle noise */
+    background-image:
+      url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+  }
+
+  /* ── Prompt ─────────────────────────────────────────────────────────────── */
+
+  .line { display: flex; align-items: baseline; white-space: pre; }
+
+  .p-user { color: #50fa7b; }
+  .p-at   { color: #44475a; }
+  .p-host { color: #6272a4; }
+  .p-path { color: #8be9fd; }
+  .p-sym  { color: #44475a; }
+
+  /* ── Command tokens ─────────────────────────────────────────────────────── */
+
+  .t-cmd   { color: #f8f8f2; }
+  .t-flag  { color: #ffb86c; }
+  .t-value { color: #ff79c6; }
+
+  /* ── Output ─────────────────────────────────────────────────────────────── */
+
+  .output  { color: #888; padding-left: 1px; white-space: pre; }
+  .k-label { color: #555; }
+  .k-value { color: #ccc; }
+  .k-ok    { color: #50fa7b; }
+  .k-dim   { color: #444; }
+  .k-blue  { color: #8be9fd; }
+  .k-purple{ color: #bd93f9; }
+
+  /* ── Cursor ─────────────────────────────────────────────────────────────── */
+
+  .cursor {
+    display: inline-block;
+    width: 7px;
+    height: 14px;
+    background: #f8f8f2;
+    margin-left: 1px;
+    vertical-align: -2px;
+    border-radius: 1px;
+    animation: blink 1.1s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ── Divider ────────────────────────────────────────────────────────────── */
+
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 0 8px;
+    color: #333;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #2a2a2a, transparent);
+  }
+
+  /* ── Tagline ────────────────────────────────────────────────────────────── */
+
+  .tagline {
+    margin-top: 18px;
+    padding: 14px 16px;
+    border-radius: 8px;
+    background: rgba(189,147,249,0.06);
+    border: 1px solid rgba(189,147,249,0.12);
+    font-size: 13px;
+    color: #888;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.8s ease, transform 0.8s ease;
+    line-height: 1.5;
+  }
+  .tagline em  { color: #bd93f9; font-style: normal; font-weight: 600; }
+  .tagline span { color: #555; font-size: 11px; display: block; margin-top: 4px; }
+  .tagline.show { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="window">
+  <div class="titlebar">
+    <div class="buttons">
+      <span class="btn close"></span>
+      <span class="btn minimize"></span>
+      <span class="btn maximize"></span>
+    </div>
+    <span class="title">noelclaw — zsh — 80×24</span>
+  </div>
+  <div class="terminal" id="t"></div>
+</div>
+
+<script>
+const T = document.getElementById('t');
+
+// ── DOM helpers ───────────────────────────────────────────────────────────────
+
+const el = (tag, cls, html) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html != null) e.innerHTML = html;
+  return e;
+};
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// ── Prompt line ───────────────────────────────────────────────────────────────
+
+function mkPromptLine() {
+  const line = el('div', 'line');
+  line.innerHTML =
+    `<span class="p-user">noel</span>` +
+    `<span class="p-at">@</span>` +
+    `<span class="p-host">macbook</span>` +
+    `<span class="p-path"> ~</span>` +
+    `<span class="p-sym"> % </span>`;
+  return line;
+}
+
+// ── Tokenize command for colored output ───────────────────────────────────────
+
+function tokenize(text) {
+  const out = [];
+  // split on spaces but keep them
+  const parts = text.split(/( +)/);
+  let first = true;
+  for (const p of parts) {
+    if (!p) continue;
+    if (/^ +$/.test(p)) { out.push({ cls: 't-cmd', text: p }); continue; }
+    if (first) { out.push({ cls: 't-cmd', text: p }); first = false; continue; }
+    const eq = p.indexOf('=');
+    if (eq > 0 && /^[a-zA-Z_]/.test(p)) {
+      out.push({ cls: 't-flag',  text: p.slice(0, eq + 1) });
+      out.push({ cls: 't-value', text: p.slice(eq + 1) });
+    } else {
+      out.push({ cls: 't-flag', text: p });
+    }
+  }
+  return out;
+}
+
+// ── Type a command char by char ───────────────────────────────────────────────
+
+async function typeCmd(line, text, speed = 46) {
+  for (const tok of tokenize(text)) {
+    const s = el('span', tok.cls);
+    line.appendChild(s);
+    for (const ch of tok.text) {
+      s.textContent += ch;
+      await sleep(speed + Math.random() * 22 - 11);
+    }
+  }
+}
+
+// ── Output helpers ────────────────────────────────────────────────────────────
+
+const out   = (html, cls = 'output') => { const d = el('div', cls, html); T.appendChild(d); return d; };
+const blank = () => out('');
+
+// ── Row: "  Label   value" ────────────────────────────────────────────────────
+
+const row = (label, value, valCls = 'k-value') =>
+  out(`  <span class="k-label">${label.padEnd(8)}</span>  <span class="${valCls}">${value}</span>`);
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+
+async function run() {
+  T.innerHTML = '';
+
+  await sleep(700);
+
+  // ── PROMPT 1 — idle ───────────────────────────────────────────────────────
+
+  const p1 = mkPromptLine();
+  const cur1 = el('span', 'cursor');
+  p1.appendChild(cur1);
+  T.appendChild(p1);
+
+  await sleep(1500);
+  cur1.remove();
+
+  // type command
+  await typeCmd(p1,
+    'agent_spawn name="market-researcher" goal="track AI infrastructure weekly"'
+  );
+
+  // fake press enter
+  const enterCur = el('span', 'cursor');
+  p1.appendChild(enterCur);
+  await sleep(260);
+  enterCur.remove();
+  await sleep(600);
+
+  // ── OUTPUT — spawn result ─────────────────────────────────────────────────
+
+  blank();
+  out('🤖  <span class="k-ok" style="font-weight:600">Agent spawned.</span>');
+  blank();
+  await sleep(80);
+  row('Name',   'market-researcher');
+  await sleep(60);
+  row('Goal',   'track AI infrastructure weekly');
+  await sleep(60);
+  row('Status', '● active', 'k-ok');
+  blank();
+  await sleep(80);
+  out(
+    '  <span class="k-dim">Recall anytime ›</span>  ' +
+    '<span class="k-blue">agent_recall name="market-researcher"</span>'
+  );
+  blank();
+
+  await sleep(2400);
+
+  // ── DIVIDER ───────────────────────────────────────────────────────────────
+
+  const div = el('div', 'divider');
+  div.textContent = '2 days later';
+  T.appendChild(div);
+
+  await sleep(900);
+
+  // ── PROMPT 2 ──────────────────────────────────────────────────────────────
+
+  const p2 = mkPromptLine();
+  const cur2 = el('span', 'cursor');
+  p2.appendChild(cur2);
+  T.appendChild(p2);
+
+  await sleep(1100);
+  cur2.remove();
+
+  await typeCmd(p2, 'agent_recall name="market-researcher"');
+
+  const enterCur2 = el('span', 'cursor');
+  p2.appendChild(enterCur2);
+  await sleep(260);
+  enterCur2.remove();
+  await sleep(700);
+
+  // ── OUTPUT — recall result ────────────────────────────────────────────────
+
+  blank();
+  out('<span class="k-purple" style="font-weight:600">## Agent: market-researcher</span>');
+  blank();
+  await sleep(90);
+  row('Goal',    'track AI infrastructure weekly');
+  await sleep(70);
+  row('Status',  '● active', 'k-ok');
+  await sleep(70);
+  row('Version', 'v1');
+  await sleep(70);
+  row('Spawned', '2 days ago', 'k-dim');
+  blank();
+
+  await sleep(1600);
+
+  // ── IDLE PROMPT ───────────────────────────────────────────────────────────
+
+  const p3 = mkPromptLine();
+  const cur3 = el('span', 'cursor');
+  p3.appendChild(cur3);
+  T.appendChild(p3);
+
+  await sleep(1400);
+
+  // ── TAGLINE ───────────────────────────────────────────────────────────────
+
+  const tl = el('div', 'tagline');
+  tl.innerHTML =
+    `Your AI agents <em>remember everything</em> — even after you close the window.` +
+    `<span>noelclaw.com &nbsp;·&nbsp; npx -y @noelclaw/mcp</span>`;
+  T.appendChild(tl);
+  await sleep(80);
+  tl.classList.add('show');
+
+  // ── LOOP after 4s ─────────────────────────────────────────────────────────
+
+  await sleep(4500);
+  await run();
+}
+
+run();
+</script>
+</body>
+</html>
