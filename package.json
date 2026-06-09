@@ -1,6 +1,6 @@
 {
   "name": "@noelclaw/mcp",
-  "version": "3.9.4",
+  "version": "3.9.5",
   "description": "Noelclaw AI Operating System — persistent memory, multi-agent swarm, DeFi execution, market intelligence, and Sentinel-gated playbooks.",
   "main": "dist/index.js",
   "bin": {

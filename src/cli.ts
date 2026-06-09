@@ -62,11 +62,20 @@ const C = {
   violet: "\x1b[35m",
   red:    "\x1b[31m",
   yellow: "\x1b[33m",
+  white:  "\x1b[97m",
+  bg:     "\x1b[48;5;17m",
 };
 
 const BANNER = `
-${C.cyan}${C.bold}  NOELCLAW${C.reset}  ${C.dim}v3.9.3 · 99 tools · persistent AI${C.reset}
-  ${C.dim}─────────────────────────────────────────${C.reset}
+${C.cyan}${C.bold}  ███╗   ██╗ ██████╗ ███████╗██╗      ██████╗██╗      █████╗ ██╗    ██╗${C.reset}
+${C.cyan}${C.bold}  ████╗  ██║██╔═══██╗██╔════╝██║     ██╔════╝██║     ██╔══██╗██║    ██║${C.reset}
+${C.cyan}${C.bold}  ██╔██╗ ██║██║   ██║█████╗  ██║     ██║     ██║     ███████║██║ █╗ ██║${C.reset}
+${C.cyan}${C.bold}  ██║╚██╗██║██║   ██║██╔══╝  ██║     ██║     ██║     ██╔══██║██║███╗██║${C.reset}
+${C.cyan}${C.bold}  ██║ ╚████║╚██████╔╝███████╗███████╗╚██████╗███████╗██║  ██║╚███╔███╔╝${C.reset}
+${C.cyan}${C.bold}  ╚═╝  ╚═══╝ ╚═════╝ ╚══════╝╚══════╝ ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝${C.reset}
+
+  ${C.dim}v3.9.5  ·  99 tools  ·  persistent AI OS  ·  noelclaw.com${C.reset}
+  ${C.dim}────────────────────────────────────────────────────────────${C.reset}
   ${C.dim}Type anything. /help for commands. Ctrl+C to exit.${C.reset}
 `;
 
