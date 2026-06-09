@@ -1,10 +1,10 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 import { startServer, ALL_TOOLS } from "./server.js";
 import { getOrCreateWallet } from "./wallet.js";
 import { getSavedToken, writeConfig } from "./config.js";
 import * as readline from "readline";
 
-// ── ANSI helpers ──────────────────────────────────────────────────────────────
+// â”€â”€ ANSI helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const C = {
   cyan:   "\x1b[36m",
   dim:    "\x1b[90m",
@@ -17,49 +17,49 @@ const C = {
 
 const BANNER = `
 ${C.cyan}
-  ███╗   ██╗ ██████╗ ███████╗██╗      ██████╗██╗      █████╗ ██╗    ██╗
-  ████╗  ██║██╔═══██╗██╔════╝██║     ██╔════╝██║     ██╔══██╗██║    ██║
-  ██╔██╗ ██║██║   ██║█████╗  ██║     ██║     ██║     ███████║██║ █╗ ██║
-  ██║╚██╗██║██║   ██║██╔══╝  ██║     ██║     ██║     ██╔══██║██║███╗██║
-  ██║ ╚████║╚██████╔╝███████╗███████╗╚██████╗███████╗██║  ██║╚███╔███╔╝
-  ╚═╝  ╚═══╝ ╚═════╝ ╚══════╝╚══════╝ ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝
+  â–ˆâ–ˆâ–ˆâ•—   â–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•—      â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•—      â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•— â–ˆâ–ˆâ•—    â–ˆâ–ˆâ•—
+  â–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•â–ˆâ–ˆâ•—â–ˆâ–ˆâ•”â•â•â•â•â•â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â•â•â•â•â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â•â–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘    â–ˆâ–ˆâ•‘
+  â–ˆâ–ˆâ•”â–ˆâ–ˆâ•— â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘   â–ˆâ–ˆâ•‘â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘ â–ˆâ•— â–ˆâ–ˆâ•‘
+  â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘   â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•  â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â•â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘
+  â–ˆâ–ˆâ•‘ â•šâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ•”â–ˆâ–ˆâ–ˆâ•”â•
+  â•šâ•â•  â•šâ•â•â•â• â•šâ•â•â•â•â•â• â•šâ•â•â•â•â•â•â•â•šâ•â•â•â•â•â•â• â•šâ•â•â•â•â•â•â•šâ•â•â•â•â•â•â•â•šâ•â•  â•šâ•â• â•šâ•â•â•â•šâ•â•â•
 ${C.reset}`;
 
 function line(label: string, value: string, color = C.cyan) {
   const pad = " ".repeat(Math.max(0, 12 - label.length));
-  process.stderr.write(`  ${color}◆ ${label}${C.reset}${pad}${value}\n`);
+  process.stderr.write(`  ${color}â—† ${label}${C.reset}${pad}${value}\n`);
 }
 
 function divider() {
-  process.stderr.write(`  ${C.dim}${"─".repeat(58)}${C.reset}\n`);
+  process.stderr.write(`  ${C.dim}${"â”€".repeat(58)}${C.reset}\n`);
 }
 
 async function main() {
   process.stderr.write(BANNER);
 
-  // ── Tool category counts ──────────────────────────────────────────────────
+  // â”€â”€ Tool category counts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const categories = [
-    { label: "Market",     count: 5,  tools: "get_market_data · get_token_data · compare_tokens · market_overview · token_history" },
-    { label: "Insight",    count: 3,  tools: "ask_noel · market_thesis · trade_plan" },
-    { label: "DeFi",       count: 6,  tools: "get_portfolio · estimate_swap · swap_tokens · send_token · analyze_wallet · get_defi_yields" },
-    { label: "Automation", count: 6,  tools: "create_automation · list_automations · pause_automation · delete_automation · get_automation_runs · run_automation" },
-    { label: "Swarm",      count: 5,  tools: "stop_swarm · get_swarm_status · swarm_research · trigger_agent · swarm_synthesize" },
-    { label: "Framework",  count: 3,  tools: "list_playbooks · run_playbook · get_noel_ledger" },
-    { label: "Vault",      count: 14, tools: "save · read · list · search · history · diff · export · credential · pin · delete · link · tag · related · related" },
-    { label: "Wallet",     count: 2,  tools: "get_wallet_address · set_telegram" },
-    { label: "MiroShark",  count: 3,  tools: "simulate · status · stop" },
-    { label: "Scanner",    count: 3,  tools: "scan_market · score_token · check_token" },
-    { label: "Agents",     count: 7,  tools: "list_agents · hire_agent · agent_spawn · agent_recall · agent_update · agent_identity · agent_ledger" },
-    { label: "Social",     count: 2,  tools: "humanize_text · write_content" },
-    { label: "Coder",      count: 5,  tools: "generate_contract · audit_contract · explain_code · review_code · generate_mcp_skill" },
-    { label: "Base",       count: 4,  tools: "query_vaults · list_markets · prepare_deposit · chain_stats" },
-    { label: "Memory",     count: 10, tools: "add · search · context · profile · list · delete · insight · extract · consolidate · publish" },
+    { label: "Market",     count: 5,  tools: "get_market_data Â· get_token_data Â· compare_tokens Â· market_overview Â· token_history" },
+    { label: "Insight",    count: 3,  tools: "ask_noel Â· market_thesis Â· trade_plan" },
+    { label: "DeFi",       count: 6,  tools: "get_portfolio Â· estimate_swap Â· swap_tokens Â· send_token Â· analyze_wallet Â· get_defi_yields" },
+    { label: "Automation", count: 6,  tools: "create_automation Â· list_automations Â· pause_automation Â· delete_automation Â· get_automation_runs Â· run_automation" },
+    { label: "Swarm",      count: 5,  tools: "stop_swarm Â· get_swarm_status Â· swarm_research Â· trigger_agent Â· swarm_synthesize" },
+    { label: "Framework",  count: 3,  tools: "list_playbooks Â· run_playbook Â· get_noel_ledger" },
+    { label: "Vault",      count: 14, tools: "save Â· read Â· list Â· search Â· history Â· diff Â· export Â· credential Â· pin Â· delete Â· link Â· tag Â· related Â· related" },
+    { label: "Wallet",     count: 2,  tools: "get_wallet_address Â· set_telegram" },
+    { label: "MiroShark",  count: 3,  tools: "simulate Â· status Â· stop" },
+    { label: "Scanner",    count: 3,  tools: "scan_market Â· score_token Â· check_token" },
+    { label: "Agents",     count: 7,  tools: "list_agents Â· hire_agent Â· agent_spawn Â· agent_recall Â· agent_update Â· agent_identity Â· agent_ledger" },
+    { label: "Social",     count: 2,  tools: "humanize_text Â· write_content" },
+    { label: "Coder",      count: 5,  tools: "generate_contract Â· audit_contract Â· explain_code Â· review_code Â· generate_mcp_skill" },
+    { label: "Base",       count: 4,  tools: "query_vaults Â· list_markets Â· prepare_deposit Â· chain_stats" },
+    { label: "Memory",     count: 10, tools: "add Â· search Â· context Â· profile Â· list Â· delete Â· insight Â· extract Â· consolidate Â· publish" },
     { label: "OS",         count: 1,  tools: "noel_status" },
-    { label: "Research",   count: 2,  tools: "web_scrape · web_search" },
-    { label: "Monitor",    count: 4,  tools: "schedule_research · create_monitor · list_monitors · cancel_monitor" },
-    { label: "GitHub",     count: 8,  tools: "list_repos · list_prs · get_pr · list_issues · get_issue · get_file · get_commits · search_code" },
-    { label: "Chronicle",  count: 2,  tools: "chronicle_add · chronicle_list" },
-    { label: "Packets",    count: 4,  tools: "packet_create · packet_run · packet_list · packet_share" },
+    { label: "Research",   count: 2,  tools: "web_scrape Â· web_search" },
+    { label: "Monitor",    count: 4,  tools: "schedule_research Â· create_monitor Â· list_monitors Â· cancel_monitor" },
+    { label: "GitHub",     count: 8,  tools: "list_repos Â· list_prs Â· get_pr Â· list_issues Â· get_issue Â· get_file Â· get_commits Â· search_code" },
+    { label: "Chronicle",  count: 2,  tools: "chronicle_add Â· chronicle_list" },
+    { label: "Packets",    count: 4,  tools: "packet_create Â· packet_run Â· packet_list Â· packet_share" },
   ];
 
   const total = ALL_TOOLS.length;
@@ -72,9 +72,9 @@ async function main() {
     ? `Bankr  ${C.dim}${model}${C.reset}`
     : process.env.ANTHROPIC_API_KEY
     ? `Anthropic  ${C.dim}${model}${C.reset}`
-    : `Noelclaw  ${C.dim}proxy · auto-auth${C.reset}`;
+    : `Noelclaw  ${C.dim}proxy Â· auto-auth${C.reset}`;
 
-  line("version", `v3.9.1  ${C.dim}MCP protocol 2.1.0${C.reset}`);
+  line("version", `v3.9.3  ${C.dim}MCP protocol 2.1.0${C.reset}`);
   line("ai",       aiMode);
   line("tools",    `${C.white}${C.bold}${total} tools loaded${C.reset}  ${C.dim}across ${categories.length} categories${C.reset}`);
 
@@ -82,18 +82,18 @@ async function main() {
   divider();
   process.stderr.write(`\n`);
 
-  // ── Categories grid ───────────────────────────────────────────────────────
+  // â”€â”€ Categories grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   for (const cat of categories) {
     const countStr = `${cat.count}`.padStart(2);
     process.stderr.write(
-      `  ${C.dim}│${C.reset} ${C.cyan}${cat.label.padEnd(11)}${C.reset} ${C.dim}${countStr}x${C.reset}  ${C.dim}${cat.tools}${C.reset}\n`
+      `  ${C.dim}â”‚${C.reset} ${C.cyan}${cat.label.padEnd(11)}${C.reset} ${C.dim}${countStr}x${C.reset}  ${C.dim}${cat.tools}${C.reset}\n`
     );
   }
 
   process.stderr.write(`\n`);
   divider();
 
-  // ── Wallet ────────────────────────────────────────────────────────────────
+  // â”€â”€ Wallet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   await startServer();
 
   const hasAuth = !!getSavedToken();
@@ -118,8 +118,8 @@ async function main() {
 }
 
 async function loginFlow() {
-  process.stderr.write(`\n  ${C.cyan}◆ noelclaw login${C.reset}\n\n`);
-  process.stderr.write(`  Get your session token from ${C.cyan}app.noelclaw.com${C.reset} → Settings\n\n`);
+  process.stderr.write(`\n  ${C.cyan}â—† noelclaw login${C.reset}\n\n`);
+  process.stderr.write(`  Get your session token from ${C.cyan}app.noelclaw.com${C.reset} â†’ Settings\n\n`);
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
 
@@ -131,7 +131,7 @@ async function loginFlow() {
   });
 
   if (!token || !token.startsWith("noel_")) {
-    process.stderr.write(`\n  ${C.yellow}✗ Invalid token — should start with noel_${C.reset}\n\n`);
+    process.stderr.write(`\n  ${C.yellow}âœ— Invalid token â€” should start with noel_${C.reset}\n\n`);
     process.exit(1);
   }
 
@@ -150,17 +150,17 @@ async function loginFlow() {
     if (!data.success) { authFailed = true; throw new Error("Token is invalid"); }
 
     writeConfig({ sessionToken: token, email: data.user?.email });
-    process.stderr.write(`\n  ${C.green}✓ Signed in as ${data.user?.email ?? data.user?.username}${C.reset}\n`);
+    process.stderr.write(`\n  ${C.green}âœ“ Signed in as ${data.user?.email ?? data.user?.username}${C.reset}\n`);
     process.stderr.write(`  ${C.dim}Token saved to ~/.noelclaw/config.json${C.reset}\n`);
     process.stderr.write(`  ${C.dim}All 99 tools now unlocked.${C.reset}\n\n`);
   } catch (err: any) {
     if (authFailed) {
-      process.stderr.write(`\n  ${C.yellow}✗ ${err.message} — check your token at app.noelclaw.com${C.reset}\n\n`);
+      process.stderr.write(`\n  ${C.yellow}âœ— ${err.message} â€” check your token at app.noelclaw.com${C.reset}\n\n`);
       process.exit(1);
     }
-    // Network error — save token anyway, will be validated on first tool call
+    // Network error â€” save token anyway, will be validated on first tool call
     writeConfig({ sessionToken: token });
-    process.stderr.write(`\n  ${C.green}✓ Token saved${C.reset}  ${C.dim}(couldn't verify — will validate on first tool call)${C.reset}\n\n`);
+    process.stderr.write(`\n  ${C.green}âœ“ Token saved${C.reset}  ${C.dim}(couldn't verify â€” will validate on first tool call)${C.reset}\n\n`);
   }
 
   process.exit(0);
@@ -178,3 +178,4 @@ if (cmd === "login") {
     process.exit(1);
   });
 }
+

@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import * as readline from "readline";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import { runAgent } from "./agent-loop.js";
 import { ALL_TOOLS } from "./server.js";
 import { writeConfig, readConfig } from "./config.js";
@@ -46,7 +49,7 @@ async function loginFlow(): Promise<void> {
 
   writeConfig({ sessionToken: data.token, email });
   console.log(`  ${C.green}✓ Logged in as ${email}${C.reset}`);
-  console.log(`  ${C.dim}Token saved to ~/.noelclaw/config.json — all 90 tools unlocked.${C.reset}\n`);
+  console.log(`  ${C.dim}Token saved to ~/.noelclaw/config.json — all 99 tools unlocked.${C.reset}\n`);
 }
 
 // ── ANSI ─────────────────────────────────────────────────────────────────────
@@ -62,7 +65,7 @@ const C = {
 };
 
 const BANNER = `
-${C.cyan}${C.bold}  NOELCLAW${C.reset}  ${C.dim}v3.2.0 · 76 tools · persistent AI${C.reset}
+${C.cyan}${C.bold}  NOELCLAW${C.reset}  ${C.dim}v3.9.3 · 99 tools · persistent AI${C.reset}
   ${C.dim}─────────────────────────────────────────${C.reset}
   ${C.dim}Type anything. /help for commands. Ctrl+C to exit.${C.reset}
 `;
@@ -85,7 +88,7 @@ function spinner(label: string): () => void {
 function printHelp() {
   console.log(`
   ${C.cyan}Commands:${C.reset}
-    /login     Sign in to unlock all 90 tools
+    /login     Sign in to unlock all tools
     /logout    Sign out and clear saved token
     /clear     Clear conversation history
     /tools     List all available tools
@@ -117,7 +120,7 @@ async function main() {
   if (cfg.email) {
     console.log(`  ${C.dim}Signed in as:${C.reset} ${C.green}${cfg.email}${C.reset} ${C.dim}· all tools unlocked${C.reset}\n`);
   } else {
-    console.log(`  ${C.dim}Not signed in. Run${C.reset} ${C.cyan}/login${C.reset} ${C.dim}to unlock all 90 tools.${C.reset}\n`);
+    console.log(`  ${C.dim}Not signed in. Run${C.reset} ${C.cyan}/login${C.reset} ${C.dim}to unlock all 99 tools.${C.reset}\n`);
   }
 
   const history: ChatMessage[] = [];
@@ -217,7 +220,196 @@ async function main() {
   });
 }
 
-main().catch(err => {
-  console.error(`Fatal: ${err.message}`);
-  process.exit(1);
-});
+// ── Install command ───────────────────────────────────────────────────────────
+interface McpClient {
+  name: string;
+  configPath: string;
+  // Which JSON key holds the servers map
+  serversKey: "mcpServers";
+}
+
+function resolveClients(): McpClient[] {
+  const home    = os.homedir();
+  const plat    = os.platform();
+  const appdata = process.env.APPDATA ?? path.join(home, "AppData", "Roaming");
+
+  const defs: { name: string; paths: Record<string, string> }[] = [
+    {
+      name: "Claude Desktop",
+      paths: {
+        darwin: path.join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json"),
+        win32:  path.join(appdata, "Claude", "claude_desktop_config.json"),
+        linux:  path.join(home, ".config", "Claude", "claude_desktop_config.json"),
+      },
+    },
+    {
+      name: "Cursor",
+      paths: {
+        darwin: path.join(home, ".cursor", "mcp.json"),
+        win32:  path.join(home, ".cursor", "mcp.json"),
+        linux:  path.join(home, ".cursor", "mcp.json"),
+      },
+    },
+    {
+      name: "Windsurf",
+      paths: {
+        darwin: path.join(home, ".windsurf", "mcp.json"),
+        win32:  path.join(home, ".windsurf", "mcp.json"),
+        linux:  path.join(home, ".windsurf", "mcp.json"),
+      },
+    },
+    {
+      name: "VS Code",
+      paths: {
+        darwin: path.join(home, "Library", "Application Support", "Code", "User", "mcp.json"),
+        win32:  path.join(appdata, "Code", "User", "mcp.json"),
+        linux:  path.join(home, ".config", "Code", "User", "mcp.json"),
+      },
+    },
+    {
+      name: "VS Code Insiders",
+      paths: {
+        darwin: path.join(home, "Library", "Application Support", "Code - Insiders", "User", "mcp.json"),
+        win32:  path.join(appdata, "Code - Insiders", "User", "mcp.json"),
+        linux:  path.join(home, ".config", "Code - Insiders", "User", "mcp.json"),
+      },
+    },
+    {
+      name: "Zed",
+      paths: {
+        darwin: path.join(home, ".config", "zed", "mcp.json"),
+        win32:  path.join(home, ".config", "zed", "mcp.json"),
+        linux:  path.join(home, ".config", "zed", "mcp.json"),
+      },
+    },
+  ];
+
+  return defs
+    .map((d) => {
+      const configPath = d.paths[plat] ?? d.paths.linux;
+      return { name: d.name, configPath, serversKey: "mcpServers" as const };
+    })
+    .filter((c) => {
+      // Include if the config file exists OR the parent directory exists (app installed but not yet configured)
+      return fs.existsSync(c.configPath) || fs.existsSync(path.dirname(c.configPath));
+    });
+}
+
+const NOELCLAW_ENTRY = {
+  command: "npx",
+  args: ["-y", "@noelclaw/mcp"],
+  env: {} as Record<string, string>,
+};
+
+function installIntoConfig(configPath: string): "added" | "updated" | "error" {
+  try {
+    let json: any = {};
+
+    if (fs.existsSync(configPath)) {
+      try { json = JSON.parse(fs.readFileSync(configPath, "utf8")); } catch { json = {}; }
+    } else {
+      // Ensure parent dir exists
+      fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    }
+
+    if (!json.mcpServers) json.mcpServers = {};
+    const existed = !!json.mcpServers.noelclaw;
+    json.mcpServers.noelclaw = NOELCLAW_ENTRY;
+
+    fs.writeFileSync(configPath, JSON.stringify(json, null, 2), "utf8");
+    return existed ? "updated" : "added";
+  } catch {
+    return "error";
+  }
+}
+
+async function installFlow(): Promise<void> {
+  console.log(`\n  ${C.cyan}${C.bold}noelclaw install${C.reset}\n`);
+  console.log(`  ${C.dim}Scanning for MCP-compatible apps...${C.reset}\n`);
+
+  const clients = resolveClients();
+
+  if (clients.length === 0) {
+    console.log(`  ${C.yellow}No MCP-compatible apps found.${C.reset}`);
+    console.log(`  ${C.dim}Install Claude Desktop, Cursor, or Windsurf, then run this again.${C.reset}\n`);
+    console.log(`  ${C.dim}Or add manually to your app's MCP config:${C.reset}`);
+    console.log(`  ${C.dim}  "noelclaw": { "command": "npx", "args": ["-y", "@noelclaw/mcp"] }${C.reset}\n`);
+    return;
+  }
+
+  let installed = 0;
+  const toRestart: string[] = [];
+
+  for (const client of clients) {
+    const result = installIntoConfig(client.configPath);
+    const short  = client.configPath.replace(os.homedir(), "~");
+
+    if (result === "added") {
+      console.log(`  ${C.green}✓${C.reset}  ${C.bold}${client.name}${C.reset}  ${C.dim}→ added${C.reset}`);
+      console.log(`     ${C.dim}${short}${C.reset}`);
+      installed++;
+      toRestart.push(client.name);
+    } else if (result === "updated") {
+      console.log(`  ${C.green}↑${C.reset}  ${C.bold}${client.name}${C.reset}  ${C.dim}→ updated to latest${C.reset}`);
+      console.log(`     ${C.dim}${short}${C.reset}`);
+      installed++;
+      toRestart.push(client.name);
+    } else {
+      console.log(`  ${C.yellow}✗${C.reset}  ${C.bold}${client.name}${C.reset}  ${C.dim}→ write failed (check permissions)${C.reset}`);
+    }
+  }
+
+  console.log(`\n  ${C.dim}${"─".repeat(52)}${C.reset}\n`);
+
+  if (installed === 0) {
+    console.log(`  ${C.yellow}Nothing was installed. Check file permissions.${C.reset}\n`);
+    return;
+  }
+
+  console.log(`  ${C.green}${C.bold}✓ Noelclaw installed in ${installed} app${installed === 1 ? "" : "s"}.${C.reset}\n`);
+
+  if (toRestart.length > 0) {
+    console.log(`  ${C.dim}Restart to activate:  ${toRestart.join("  ·  ")}${C.reset}`);
+  }
+
+  const cfg = readConfig();
+  if (!cfg.sessionToken) {
+    console.log(`\n  ${C.dim}Next step — sign in to unlock all tools:${C.reset}`);
+    console.log(`  ${C.cyan}  noelclaw login${C.reset}\n`);
+  } else {
+    console.log(`\n  ${C.dim}Already signed in as ${cfg.email ?? "user"}.${C.reset}`);
+    console.log(`  ${C.dim}Open your MCP client and start using Noelclaw.${C.reset}\n`);
+  }
+}
+
+// ── Entry point ───────────────────────────────────────────────────────────────
+const cmd = process.argv[2];
+
+if (cmd === "install") {
+  installFlow().catch((err) => {
+    console.error(`  ${C.red}✗ install error: ${err.message}${C.reset}`);
+    process.exit(1);
+  });
+} else if (cmd === "login") {
+  loginFlow().catch((err) => {
+    console.error(`  ${C.red}✗ login error: ${err.message}${C.reset}`);
+    process.exit(1);
+  });
+} else if (cmd === "help" || cmd === "--help" || cmd === "-h") {
+  console.log(`
+  ${C.cyan}${C.bold}noelclaw${C.reset}  ${C.dim}AI OS for your terminal${C.reset}
+
+  ${C.cyan}Commands:${C.reset}
+    noelclaw              Start interactive AI terminal
+    noelclaw install      Auto-configure all detected MCP clients
+    noelclaw login        Sign in to unlock all tools
+    noelclaw help         Show this help
+
+  ${C.dim}Claude Desktop / Cursor / Windsurf / VS Code are all supported.${C.reset}
+`);
+} else {
+  main().catch(err => {
+    console.error(`Fatal: ${err.message}`);
+    process.exit(1);
+  });
+}
