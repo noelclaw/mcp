@@ -10,14 +10,11 @@ import type { ChatMessage } from "./llm.js";
 
 const CONVEX_SITE = process.env.NOELCLAW_CONVEX_URL ?? "https://api.noelclaw.com";
 
-async function loginFlow(): Promise<void> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+async function loginWithOtp(rl: readline.Interface): Promise<void> {
   const ask = (q: string) => new Promise<string>(resolve => rl.question(q, resolve));
 
-  console.log(`\n  ${C.cyan}${C.bold}Sign in to Noelclaw${C.reset}\n`);
-
   const email = (await ask(`  Email: `)).trim();
-  if (!email) { rl.close(); return; }
+  if (!email) return;
 
   process.stdout.write(`  Sending code to ${email}...`);
   const sendRes = await fetch(`${CONVEX_SITE}/auth/otp/send`, {
@@ -27,13 +24,12 @@ async function loginFlow(): Promise<void> {
   });
   if (!sendRes.ok) {
     const e = await sendRes.json().catch(() => ({})) as any;
-    console.log(`\n  ${C.red}✗${C.reset} ${e.error ?? "Failed to send code"}\n`);
-    rl.close(); return;
+    console.log(`\n  ${C.red}✗${C.reset} ${(e as any).error ?? "Failed to send code"}\n`);
+    return;
   }
   console.log(` ${C.green}✓${C.reset}`);
 
   const code = (await ask(`  6-digit code: `)).trim();
-  rl.close();
 
   process.stdout.write(`  Verifying...`);
   const verifyRes = await fetch(`${CONVEX_SITE}/auth/otp/verify`, {
@@ -50,6 +46,49 @@ async function loginFlow(): Promise<void> {
   writeConfig({ sessionToken: data.token, email });
   console.log(`  ${C.green}✓ Logged in as ${email}${C.reset}`);
   console.log(`  ${C.dim}Token saved to ~/.noelclaw/config.json — all 99 tools unlocked.${C.reset}\n`);
+}
+
+async function loginWithApiKey(rl: readline.Interface): Promise<void> {
+  const ask = (q: string) => new Promise<string>(resolve => rl.question(q, resolve));
+
+  console.log(`  ${C.dim}Generate an API key at app.noelclaw.com → Settings → API Keys${C.reset}`);
+  const apiKey = (await ask(`  API key (noel_sk_...): `)).trim();
+  if (!apiKey) return;
+
+  process.stdout.write(`  Authenticating...`);
+  const res = await fetch(`${CONVEX_SITE}/auth/apikey/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ apiKey }),
+  });
+  const data = await res.json() as any;
+  if (!res.ok || !data.token) {
+    console.log(`\n  ${C.red}✗${C.reset} ${data.error ?? "Invalid API key"}\n`);
+    return;
+  }
+
+  writeConfig({ sessionToken: data.token, email: data.email ?? "api-key-user" });
+  console.log(`  ${C.green}✓ Authenticated${data.email ? ` as ${data.email}` : ""}${C.reset}`);
+  console.log(`  ${C.dim}Token saved to ~/.noelclaw/config.json — all 99 tools unlocked.${C.reset}\n`);
+}
+
+async function loginFlow(): Promise<void> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const ask = (q: string) => new Promise<string>(resolve => rl.question(q, resolve));
+
+  console.log(`\n  ${C.cyan}${C.bold}Sign in to Noelclaw${C.reset}\n`);
+  console.log(`  ${C.dim}[1] Email (OTP code sent to your email)${C.reset}`);
+  console.log(`  ${C.dim}[2] API key (from app.noelclaw.com → Settings)${C.reset}\n`);
+
+  const choice = (await ask(`  Choose [1/2]: `)).trim();
+
+  if (choice === "2") {
+    await loginWithApiKey(rl);
+  } else {
+    await loginWithOtp(rl);
+  }
+
+  rl.close();
 }
 
 // ── ANSI ─────────────────────────────────────────────────────────────────────
@@ -104,11 +143,11 @@ function printHelp() {
     /quit      Exit
 
   ${C.dim}Examples:
-    remember my coding style for next time
-    what's ETH doing right now?
-    swap 0.5 ETH to USDC on Base
-    send me a weekly digest every Monday
-    research "best DeFi yields on Base"${C.reset}
+    remember that I prefer concise answers
+    search the web for recent AI news
+    save a note to my vault
+    research "top AI agent frameworks in 2025"
+    send me a weekly digest every Monday${C.reset}
 `);
 }
 
