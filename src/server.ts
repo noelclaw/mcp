@@ -49,7 +49,7 @@ export const ALL_TOOLS = [
   ...AUTOMATION_TOOLS,   // 6 — create, list, pause, delete, get_runs, run
   ...SWARM_TOOLS,        // 5 — stop, status, research, trigger_agent, synthesize (start_swarm is internal)
   ...FRAMEWORK_TOOLS,    // 3 — list_playbooks, run_playbook, get_noel_ledger
-  ...VAULT_TOOLS,        // 14 — save, read, list, search, history, diff, export, store_credential, get_credential, pin, delete, tag, link, related
+  ...VAULT_TOOLS,        // 14 — save, read, list, search, history, diff, export, pin, tag, delete, link, related, store_credential, get_credential
   ...WALLET_TOOLS,       // 2 — get_wallet_address, set_telegram
   ...MIROSHARK_TOOLS,    // 3 — simulate, status, stop
   ...HUMANIZER_TOOLS,    // 2 — humanize_text, write_content (thread+post merged)
@@ -95,7 +95,7 @@ export const HANDLER_MAP = new Map<string, Handler>([
 ]);
 
 export const server = new Server(
-  { name: "noelclaw", version: "3.9.0" },
+  { name: "noelclaw", version: "3.9.1" },
   { capabilities: { tools: {} } }
 );
 

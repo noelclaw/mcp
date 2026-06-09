@@ -1,6 +1,6 @@
 {
   "name": "@noelclaw/mcp",
-  "version": "3.8.2",
+  "version": "3.9.1",
   "description": "Noelclaw AI Operating System — persistent memory, multi-agent swarm, DeFi execution, market intelligence, and Sentinel-gated playbooks.",
   "main": "dist/index.js",
   "bin": {
@@ -16,15 +16,15 @@
   },
   "keywords": [
     "mcp",
-    "crypto",
     "ai",
-    "defi",
+    "agent",
+    "memory",
     "noelclaw",
-    "bitcoin",
-    "ethereum",
     "research",
-    "trading",
-    "agent"
+    "automation",
+    "claude",
+    "cursor",
+    "windsurf"
   ],
   "repository": {
     "type": "git",

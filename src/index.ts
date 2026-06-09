@@ -74,7 +74,7 @@ async function main() {
     ? `Anthropic  ${C.dim}${model}${C.reset}`
     : `Noelclaw  ${C.dim}proxy · auto-auth${C.reset}`;
 
-  line("version", `v3.9.0  ${C.dim}MCP protocol 2.1.0${C.reset}`);
+  line("version", `v3.9.1  ${C.dim}MCP protocol 2.1.0${C.reset}`);
   line("ai",       aiMode);
   line("tools",    `${C.white}${C.bold}${total} tools loaded${C.reset}  ${C.dim}across ${categories.length} categories${C.reset}`);
 
