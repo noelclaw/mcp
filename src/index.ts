@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { startServer, ALL_TOOLS } from "./server.js";
 import { getOrCreateWallet } from "./wallet.js";
-import { getSavedToken } from "./config.js";
+import { getSavedToken, writeConfig } from "./config.js";
+import * as readline from "readline";
 
 // ── ANSI helpers ──────────────────────────────────────────────────────────────
 const C = {
@@ -41,7 +42,7 @@ async function main() {
     { label: "Market",     count: 5,  tools: "get_market_data · get_token_data · compare_tokens · market_overview · token_history" },
     { label: "Insight",    count: 3,  tools: "ask_noel · market_thesis · trade_plan" },
     { label: "DeFi",       count: 6,  tools: "get_portfolio · estimate_swap · swap_tokens · send_token · analyze_wallet · get_defi_yields" },
-    { label: "Automation", count: 6,  tools: "create · list · pause · delete · runs · run_now" },
+    { label: "Automation", count: 6,  tools: "create_automation · list_automations · pause_automation · delete_automation · get_automation_runs · run_automation" },
     { label: "Swarm",      count: 5,  tools: "stop_swarm · get_swarm_status · swarm_research · trigger_agent · swarm_synthesize" },
     { label: "Framework",  count: 3,  tools: "list_playbooks · run_playbook · get_noel_ledger" },
     { label: "Vault",      count: 14, tools: "save · read · list · search · history · diff · export · credential · pin · delete · link · tag · related · related" },
@@ -116,7 +117,64 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  process.stderr.write(`[noelclaw] fatal: ${err}\n`);
-  process.exit(1);
-});
+async function loginFlow() {
+  process.stderr.write(`\n  ${C.cyan}◆ noelclaw login${C.reset}\n\n`);
+  process.stderr.write(`  Get your session token from ${C.cyan}app.noelclaw.com${C.reset} → Settings\n\n`);
+
+  const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
+
+  const token = await new Promise<string>((resolve) => {
+    rl.question(`  Paste your session token: `, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+
+  if (!token || !token.startsWith("noel_")) {
+    process.stderr.write(`\n  ${C.yellow}✗ Invalid token — should start with noel_${C.reset}\n\n`);
+    process.exit(1);
+  }
+
+  // Verify token against API
+  const siteUrl = process.env.CONVEX_SITE_URL ?? "https://noelclaw.convex.site";
+  let authFailed = false;
+  try {
+    const res = await fetch(`${siteUrl}/auth/me`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) { authFailed = true; throw new Error("Server rejected token"); }
+    const data = await res.json() as any;
+    if (!data.success) { authFailed = true; throw new Error("Token is invalid"); }
+
+    writeConfig({ sessionToken: token, email: data.user?.email });
+    process.stderr.write(`\n  ${C.green}✓ Signed in as ${data.user?.email ?? data.user?.username}${C.reset}\n`);
+    process.stderr.write(`  ${C.dim}Token saved to ~/.noelclaw/config.json${C.reset}\n`);
+    process.stderr.write(`  ${C.dim}All 99 tools now unlocked.${C.reset}\n\n`);
+  } catch (err: any) {
+    if (authFailed) {
+      process.stderr.write(`\n  ${C.yellow}✗ ${err.message} — check your token at app.noelclaw.com${C.reset}\n\n`);
+      process.exit(1);
+    }
+    // Network error — save token anyway, will be validated on first tool call
+    writeConfig({ sessionToken: token });
+    process.stderr.write(`\n  ${C.green}✓ Token saved${C.reset}  ${C.dim}(couldn't verify — will validate on first tool call)${C.reset}\n\n`);
+  }
+
+  process.exit(0);
+}
+
+const cmd = process.argv[2];
+if (cmd === "login") {
+  loginFlow().catch((err) => {
+    process.stderr.write(`[noelclaw] login error: ${err}\n`);
+    process.exit(1);
+  });
+} else {
+  main().catch((err) => {
+    process.stderr.write(`[noelclaw] fatal: ${err}\n`);
+    process.exit(1);
+  });
+}
