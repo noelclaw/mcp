@@ -206,7 +206,16 @@ Rules:
 - Each sub-question must be a standalone web search query, under 90 chars.
 - Cover different facets: definition, current state, key actors, comparisons, counterarguments, recent news, forward outlook.
 - No duplicates, no near-paraphrases.
-- Prefer concrete proper nouns and dates when relevant.
+
+ENTITY-HUNTING — at least HALF of your sub-questions must target queries likely to surface:
+- Specific company / product / framework names (e.g., "LangGraph adoption stats", "Manus orchestration funding")
+- Dollar amounts (acquisitions, funding rounds, revenue, ARR, market size)
+- Benchmark numbers (% adoption, latency ms, accuracy scores, MMLU/HumanEval/SWE-bench results)
+- Specific dates and timeline events (when X launched, when Y reached scale)
+- Named studies / surveys / reports (e.g., "Anthropic Economic Index 2026", "a16z AI infrastructure report")
+
+Bad: "what is X" → too generic, returns Wikipedia
+Good: "X adoption rate enterprise 2026 survey" → returns concrete stats
 
 Question: "${query}"
 
@@ -265,14 +274,29 @@ async function synthesize(query: string, sources: Source[], isFinal: boolean): P
     ? `## TL;DR
 2-3 sentences answering the question directly. No hedging unless evidence demands it.
 
+## At a Glance
+A Markdown table summarizing 4-8 key metrics, dimensions, or status indicators from the sources. Format:
+| Dimension | Value / Status | Source |
+|---|---|---|
+| (example) Production adoption | 57% have agents in production | [3] |
+
+Use tables whenever you have:
+- Comparison data (X vs Y vs Z)
+- Status snapshots (multiple metrics at one point in time)
+- Rankings or scorecards
+- Dollar amounts, percentages, dates side-by-side
+
+This section is REQUIRED whenever the sources contain quantitative data. Skip ONLY if the topic is purely qualitative.
+
 ## Key Findings
 - 6-10 substantive bullets, each citing source numbers like [1] or [2,4]
+- Lead with specific named entities, dollar amounts, percentages, dates — not generalities
 - Mix angles — definition, current state, comparisons, criticisms
 - Tag each bullet with a confidence level at the end: \`(high)\` / \`(medium)\` / \`(low)\`
 - "high" means primary sources or strong consensus; "low" means single source or contested
 
 ## Analysis
-3-5 paragraphs synthesizing the sources. Connect findings, note tensions and gaps, distinguish correlation from causation. Use inline citations throughout.
+3-5 paragraphs synthesizing the sources. Connect findings, note tensions and gaps, distinguish correlation from causation. Use inline citations throughout — every numerical claim or named entity must carry a [N].
 
 ## Counterevidence & Limitations
 - 2-4 bullets listing what could change the conclusion: weak sources, missing data, conflicting findings, age of evidence
@@ -292,15 +316,19 @@ OUTPUT FORMAT (strict — exact Markdown sections, in this order):
 
 ${finalSections}
 
-CITATION RULES:
+CITATION DENSITY RULES (strict):
+- Every numerical claim (percentage, dollar amount, count, date) MUST carry [N]
+- Every named entity (company, product, framework, person) MUST carry [N] on first mention
 - Cite using [N] inline, matching source numbers exactly
-- Cite at least once per non-trivial claim
+- Target: at least 1 citation per 50 words in Key Findings and Analysis
 - Distinguish primary evidence (data, official statements, .gov/.edu) from secondary commentary
 - Flag any claim from a single source as "(single source [N])"
 - Note source dates when relevant — older sources may be stale
 
 STYLE RULES:
 - Be specific: numbers, names, dates over vague claims
+- Lead with concrete entities, not abstract concepts
+- Tables > bullets when comparing dimensions
 - No filler ("it is important to note", "in conclusion", "in today's world", "navigate the landscape")
 - No hedging when evidence is strong; no false confidence when it's weak
 - Don't write a Sources section — that gets appended automatically`;
@@ -312,7 +340,44 @@ ${sourceBlocks}
 
 Write the ${isFinal ? "final" : "draft"} report now. Markdown only — no preamble, no postamble.`;
 
-  return await callLLM(sys, user, isFinal ? 4000 : 2000, [], 90_000);
+  const report = await callLLM(sys, user, isFinal ? 4000 : 2000, [], 90_000);
+
+  // Citation density check — only for final reports. If the report has many
+  // numerical claims but very few [N] citations, retry once with a stricter
+  // instruction. Cheap insurance against lazy synthesis.
+  if (!isFinal) return report;
+
+  const density = measureCitationDensity(report);
+  if (density.numericalClaims >= 5 && density.citations < Math.max(3, density.numericalClaims / 2)) {
+    const retryUser = `${user}
+
+⚠️ Your previous draft had ${density.numericalClaims} numerical claims but only ${density.citations} [N] citations. That ratio is too low. Rewrite with stricter citation density: every percentage, dollar amount, count, date, and named entity must carry [N]. Use the At a Glance table to anchor the key metrics.`;
+    try {
+      return await callLLM(sys, retryUser, 4000, [], 90_000);
+    } catch {
+      return report; // fall back to original if retry fails
+    }
+  }
+
+  return report;
+}
+
+function measureCitationDensity(report: string): { numericalClaims: number; citations: number; namedEntities: number } {
+  // Numerical claims: percentages, dollar amounts, large counts, years
+  const percentages = report.match(/\d+(?:\.\d+)?\s*%/g) ?? [];
+  const dollars = report.match(/\$\s*\d+(?:\.\d+)?\s*(?:[KkMmBbTt]|million|billion|trillion)?/g) ?? [];
+  const counts = report.match(/\b\d{1,3}(?:,\d{3})+\b/g) ?? [];
+  const years = report.match(/\b(?:19|20)\d{2}\b/g) ?? [];
+  const numericalClaims = percentages.length + dollars.length + counts.length + years.length;
+
+  // Inline citations
+  const citationsMatches = report.match(/\[\d+(?:\s*,\s*\d+)*\]/g) ?? [];
+  const citations = citationsMatches.length;
+
+  // Capitalized multi-word entities (proper nouns) — proxy for named entities
+  const namedEntities = (report.match(/\b[A-Z][a-z]+(?:[A-Z][a-z]+|\s+[A-Z][a-z]+)\b/g) ?? []).length;
+
+  return { numericalClaims, citations, namedEntities };
 }
 
 // ─── Source ranking ───────────────────────────────────────────────────────────
