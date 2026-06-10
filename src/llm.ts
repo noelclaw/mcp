@@ -2,16 +2,21 @@ import { signRequest } from "./wallet.js";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const BANKR_URL = "https://llm.bankr.bot/v1/chat/completions";
+const GROK_URL = "https://api.x.ai/v1/chat/completions";
 const CONVEX_SITE = process.env.NOELCLAW_CONVEX_URL ?? "https://api.noelclaw.com";
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
 /**
  * Call the best available LLM.
- * Priority: BANKR_API_KEY → ANTHROPIC_API_KEY → Convex backend (owner pays)
+ *
+ * Provider auto-priority (when NOELCLAW_PROVIDER unset):
+ *   BANKR_API_KEY → ANTHROPIC_API_KEY → GROK_API_KEY → Convex backend
+ *
+ * Force a provider via NOELCLAW_PROVIDER: "bankr" | "anthropic" | "grok"
  *
  * Model selection (first wins):
- *   NOELCLAW_MODEL → BANKR_MODEL / ANTHROPIC_MODEL → "claude-haiku-4-5-20251001"
+ *   NOELCLAW_MODEL → {provider}_MODEL → provider default
  */
 export async function callLLM(
   systemPrompt: string,
@@ -20,11 +25,20 @@ export async function callLLM(
   history: ChatMessage[] = [],
   timeoutMs = 60_000,
 ): Promise<string> {
+  const provider     = process.env.NOELCLAW_PROVIDER?.toLowerCase().trim();
   const bankrKey     = process.env.BANKR_API_KEY;
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const grokKey      = process.env.GROK_API_KEY;
 
+  // Explicit provider override — user picked one
+  if (provider === "grok" && grokKey)           return callGrok(grokKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs);
+  if (provider === "anthropic" && anthropicKey) return callAnthropic(anthropicKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs);
+  if (provider === "bankr" && bankrKey)         return callBankr(bankrKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs);
+
+  // Auto priority
   if (bankrKey)     return callBankr(bankrKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs);
   if (anthropicKey) return callAnthropic(anthropicKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs);
+  if (grokKey)      return callGrok(grokKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs);
 
   // Fallback: route through Convex backend — owner covers cost
   return callViaConvex(systemPrompt, userPrompt, history, timeoutMs);
@@ -132,6 +146,41 @@ async function callBankr(
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`Bankr error ${res.status}: ${body.slice(0, 200)}`);
+  }
+
+  const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+  return data.choices?.[0]?.message?.content ?? "";
+}
+
+async function callGrok(
+  apiKey: string,
+  systemPrompt: string,
+  userPrompt: string,
+  maxTokens: number,
+  history: ChatMessage[],
+  timeoutMs: number,
+): Promise<string> {
+  const model = process.env.NOELCLAW_MODEL ?? process.env.GROK_MODEL ?? "grok-4-fast-reasoning";
+
+  const res = await fetch(GROK_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...history,
+        { role: "user", content: userPrompt },
+      ],
+      max_tokens: maxTokens,
+      stream: false,
+    }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Grok error ${res.status}: ${body.slice(0, 200)}`);
   }
 
   const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
