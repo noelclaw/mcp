@@ -113,7 +113,7 @@ ${C.cyan}${C.bold}  ██║╚██╗██║██║   ██║██╔
 ${C.cyan}${C.bold}  ██║ ╚████║╚██████╔╝███████╗███████╗╚██████╗███████╗██║  ██║╚███╔███╔╝${C.reset}
 ${C.cyan}${C.bold}  ╚═╝  ╚═══╝ ╚═════╝ ╚══════╝╚══════╝ ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝${C.reset}
 
-  ${C.dim}v3.12.0  ·  100 tools  ·  persistent AI OS  ·  noelclaw.com${C.reset}
+  ${C.dim}v3.13.0  ·  100 tools  ·  persistent AI OS  ·  noelclaw.com${C.reset}
   ${C.dim}────────────────────────────────────────────────────────────${C.reset}
   ${C.dim}Type anything. /help for commands. Ctrl+C to exit.${C.reset}
 `;

@@ -60,6 +60,10 @@ export const DEEP_RESEARCH_TOOLS: Tool[] = [
           type: "string",
           description: "Optional angle hint — 'technical', 'investment', 'news', 'comparison'. Steers planning.",
         },
+        continueFrom: {
+          type: "string",
+          description: "Vault key of a previous deep_research report to build on. When provided, the planner focuses on UPDATES, GAPS, and NEW developments since that report — not re-treading covered ground. The new report explicitly references and extends the prior findings. Format: 'research/...' (use vault_list type:research to find candidates). This is the multi-session research feature — Perplexity / ChatGPT Deep Research don't have an equivalent.",
+        },
         liveSearch: {
           type: "boolean",
           description: "Enable Grok Live Search — pulls real-time results from X (Twitter), news, web, RSS during synthesis. Only works when Grok is the active LLM provider. Adds ~5-15s per Grok call. Default: auto (on when Grok is active).",
@@ -84,6 +88,7 @@ const InputSchema = z.object({
   query: z.string().min(3).max(500),
   depth: z.enum(["fast", "standard", "deep"]).optional(),
   focus: z.string().max(80).optional(),
+  continueFrom: z.string().max(200).optional(),
   liveSearch: z.boolean().optional(),
   liveSearchSources: z.array(z.enum(["web", "x", "news", "rss"])).optional(),
   liveSearchDays: z.number().int().min(1).max(365).optional(),
@@ -222,10 +227,29 @@ async function fcScrape(url: string): Promise<{ markdown: string; publishedAt?: 
 
 // ─── LLM stages ───────────────────────────────────────────────────────────────
 
-async function planQueries(query: string, n: number, focus?: string): Promise<string[]> {
+async function planQueries(query: string, n: number, focus?: string, priorContext?: string): Promise<string[]> {
   const focusNote = focus ? ` Focus angle: ${focus}.` : "";
   const sys = "You are a research planner. Output strict JSON only — no preamble, no markdown.";
-  const user = `Decompose this research question into ${n} sub-questions that together cover the topic from different angles.${focusNote}
+
+  const continuationNote = priorContext
+    ? `
+
+⚠️ CONTINUATION MODE — there is a PRIOR research report on this topic:
+
+"""
+${priorContext.slice(0, 2500)}
+"""
+
+Your sub-questions must focus on:
+1. UPDATES — what has changed since the prior report (new releases, news, data revisions)
+2. GAPS — angles the prior report explicitly listed as open questions or follow-ups
+3. NEW developments — entities/events the prior report doesn't mention
+4. VERIFICATION — claims the prior report flagged as low-confidence or single-source
+
+DO NOT re-tread material already well-covered in the prior report. The user already has those answers.`
+    : "";
+
+  const user = `Decompose this research question into ${n} sub-questions that together cover the topic from different angles.${focusNote}${continuationNote}
 
 Rules:
 - Each sub-question must be a standalone web search query, under 90 chars.
@@ -292,6 +316,7 @@ async function synthesize(
   sources: Source[],
   isFinal: boolean,
   liveSearch?: LiveSearchOptions,
+  priorContext?: { key: string; content: string },
 ): Promise<{ report: string; liveCitations: string[] }> {
   const sourceBlocks = sources
     .map((s) => {
@@ -377,10 +402,29 @@ STYLE RULES:
 - No hedging when evidence is strong; no false confidence when it's weak
 - Don't write a Sources section — that gets appended automatically`;
 
+  const continuationBlock = priorContext && isFinal
+    ? `
+
+PRIOR REPORT (you are CONTINUING this research, not starting fresh):
+
+\`\`\`
+${priorContext.content.slice(0, 3500)}
+\`\`\`
+
+CONTINUATION RULES:
+- Start the TL;DR with: "Update to prior report \`${priorContext.key}\` —" followed by the new takeaway.
+- The "At a Glance" table must include a column "Δ since prior" showing what changed.
+- Key Findings must mark each bullet with: \`(NEW)\` for genuinely new info, \`(UPDATED)\` for changed numbers/positions, or \`(CONFIRMED)\` for points the new sources reinforce.
+- Counterevidence section must explicitly say which prior claims are now weaker.
+- Follow-up Questions must build on the prior report's open questions if they're still relevant.
+
+Do not re-explain background already in the prior report. Assume the reader read it.`
+    : "";
+
   const user = `RESEARCH QUESTION: ${query}
 
 SOURCES:
-${sourceBlocks}${liveSearchNote}
+${sourceBlocks}${liveSearchNote}${continuationBlock}
 
 Write the ${isFinal ? "final" : "draft"} report now. Markdown only — no preamble, no postamble.`;
 
@@ -559,7 +603,7 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
     return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
   }
 
-  const { query, focus } = parsed.data;
+  const { query, focus, continueFrom } = parsed.data;
   const depth = parsed.data.depth ?? "standard";
   const saveToVault = parsed.data.saveToVault ?? true;
 
@@ -609,9 +653,31 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
     log(`🛰  Live Search: ON · sources=[${liveSearch.sources.join(", ")}] · max=${liveSearch.maxResults}${liveSearch.fromDate ? ` · since=${liveSearch.fromDate}` : ""}`);
   }
 
+  // ── Stage 0: load prior report (continueFrom) ──
+  let priorContext: { key: string; content: string } | undefined;
+  if (continueFrom) {
+    log(`📚 Loading prior report \`${continueFrom}\` to continue research thread...`);
+    try {
+      const prior = await callConvex(
+        `/vault/entry?key=${encodeURIComponent(continueFrom)}`,
+        "GET",
+        undefined,
+        "vault_read",
+      ) as { content?: string; key?: string } | null;
+      if (prior?.content && prior.content.length > 100) {
+        priorContext = { key: prior.key ?? continueFrom, content: prior.content };
+        log(`✅ Loaded prior report (${prior.content.length} chars) — planner & synth will build on it.`);
+      } else {
+        log(`⚠️ Prior report \`${continueFrom}\` not found or empty — proceeding as fresh research.`);
+      }
+    } catch (err: any) {
+      log(`⚠️ Could not load prior report (${err.message ?? "error"}) — proceeding as fresh research.`);
+    }
+  }
+
   // ── Stage 1: plan ──
-  log(`🧭 Planning ${subN} sub-questions...`);
-  const subQs = await planQueries(query, subN, focus);
+  log(`🧭 Planning ${subN} sub-questions${priorContext ? " (continuation mode — focusing on updates/gaps/new)" : ""}...`);
+  const subQs = await planQueries(query, subN, focus, priorContext?.content);
 
   // ── Stage 2: parallel search ──
   log(`🔎 Searching ${subQs.length} queries × ${searchLimit} results each...`);
@@ -715,11 +781,11 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
   }
 
   // ── Stage 6: final synthesis ──
-  log(`📝 Writing final report from ${sources.length} sources${liveSearch ? " + Live Search" : ""}...`);
+  log(`📝 Writing final report from ${sources.length} sources${liveSearch ? " + Live Search" : ""}${priorContext ? ` (continuing \`${priorContext.key}\`)` : ""}...`);
   let report: string;
   let liveCitations: string[] = [];
   try {
-    const finalResult = await synthesize(query, sources, true, liveSearch);
+    const finalResult = await synthesize(query, sources, true, liveSearch, priorContext);
     report = finalResult.report;
     liveCitations = finalResult.liveCitations;
   } catch (err: any) {
@@ -733,7 +799,7 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
   if (issues.length >= 2) {
     log(`🔧 Output validation found ${issues.length} issues (${issues.join(", ")}). Retrying synthesis with stricter prompt...`);
     try {
-      const retryResult = await synthesize(query, sources, true, liveSearch);
+      const retryResult = await synthesize(query, sources, true, liveSearch, priorContext);
       const retryIssues = validateReportStructure(retryResult.report);
       if (retryIssues.length < issues.length) {
         report = retryResult.report;
@@ -773,14 +839,35 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
     try {
       const r = (await callConvex("/vault/save", "POST", {
         type: "research",
-        title: `Deep Research: ${query.slice(0, 80)}`,
+        title: priorContext
+          ? `Deep Research (cont.): ${query.slice(0, 80)}`
+          : `Deep Research: ${query.slice(0, 80)}`,
         content: fullReport,
-        tags: ["deep-research", depth, ...(focus ? [focus] : [])],
+        tags: [
+          "deep-research",
+          depth,
+          ...(focus ? [focus] : []),
+          ...(priorContext ? ["continuation"] : []),
+        ],
         agentId: "research",
-        commitMsg: "deep_research run",
+        commitMsg: priorContext ? `deep_research continues ${priorContext.key}` : "deep_research run",
       }, "vault_save")) as { key?: string } | null;
       vaultKey = r?.key ?? null;
     } catch { /* keep going — return report inline */ }
+  }
+
+  // ── Stage 7b: link as continuation when continueFrom was used ──
+  if (vaultKey && priorContext) {
+    try {
+      await callConvex("/vault/link", "POST", {
+        fromKey: vaultKey,
+        toKey: priorContext.key,
+        relation: "continues",
+      }, "vault_link");
+      log(`🧬 Linked new report as \`continues\` → \`${priorContext.key}\`.`);
+    } catch {
+      log(`⚠️ Could not create continuation link.`);
+    }
   }
 
   // ── Stage 8: vault auto-linking — connect this report to related research ──
@@ -834,9 +921,14 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
     ? `🔗 Auto-linked to ${linkedKeys.length} related research entr${linkedKeys.length === 1 ? "y" : "ies"} in your vault:\n${linkedKeys.map((k) => `   • \`${k}\``).join("\n")}`
     : "";
 
+  const continuationSection = priorContext
+    ? `🧬 **Continuation** of \`${priorContext.key}\` — linked as relation:continues`
+    : "";
+
   const header = [
     `🔬 **Deep Research v3** — depth: ${depth} · ${subQs.length} planned + ${useReflection ? "reflection" : "no reflection"} · ${sources.length} scraped sources${liveCitations.length > 0 ? ` · ${liveCitations.length} live` : ""}${liveSearch ? ` · 🛰 Live Search [${liveSearch.sources.join(",")}]` : ""}`,
     vaultKey ? `📁 Saved to vault: \`${vaultKey}\`` : (saveToVault ? `⚠️ Vault save skipped (not authenticated — sign in with \`noelclaw login\`)` : ""),
+    continuationSection,
     linkedSection,
     ``,
     `<details><summary>📋 Process log</summary>`,
