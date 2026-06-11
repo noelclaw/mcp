@@ -32,6 +32,12 @@ export const DEEP_RESEARCH_TOOLS: Tool[] = [
       "self-critiques to find gaps, searches once more for the gaps, then writes " +
       "a final structured Markdown report with inline [N] citations and follow-up " +
       "questions. Auto-saves to vault as type:research. Requires FIRECRAWL_API_KEY. " +
+      "Includes output structure validation — if the report is missing the At a " +
+      "Glance table, Counterevidence section, or has too few citations, synthesis " +
+      "is automatically retried with stricter instructions. " +
+      "Also auto-links the new report to related past research in your vault " +
+      "(uses semantic search) — your research knowledge graph grows organically " +
+      "over time. " +
       "When using Grok as the LLM provider, can also enable Live Search to pull " +
       "real-time results from X (Twitter), news, and the web directly during " +
       "synthesis — toggle with `liveSearch=true`. " +
@@ -430,6 +436,70 @@ function measureCitationDensity(report: string): { numericalClaims: number; cita
   return { numericalClaims, citations, namedEntities };
 }
 
+// Output structure validation — returns the names of any failed checks.
+// Used to decide whether the synthesis output is worth retrying.
+function validateReportStructure(report: string): string[] {
+  const issues: string[] = [];
+
+  // 1. "At a Glance" section with a Markdown table
+  const atGlance = report.match(/##\s*At a Glance[\s\S]*?(?=\n##|\n#|$)/i);
+  if (!atGlance) {
+    issues.push("missing-at-a-glance");
+  } else {
+    // Markdown table = at least 2 lines that start with `|`
+    const tableLines = (atGlance[0].match(/^\|.+\|.+$/gm) ?? []).length;
+    if (tableLines < 2) issues.push("at-a-glance-no-table");
+  }
+
+  // 2. Counterevidence section must exist and be non-trivial
+  const counter = report.match(/##\s*Counterevidence[\s\S]*?(?=\n##|\n#|$)/i);
+  if (!counter) {
+    issues.push("missing-counterevidence");
+  } else {
+    const counterText = counter[0].replace(/##.*$/m, "").trim();
+    if (counterText.length < 80) issues.push("counterevidence-too-short");
+  }
+
+  // 3. Citation density — every 200 words should have at least 1 [N] citation
+  // in the Key Findings + Analysis sections
+  const findingsAndAnalysis = report
+    .replace(/^#.+$/m, "") // strip title
+    .replace(/##\s*(TL;DR|At a Glance|Sources|Follow-up Questions)[\s\S]*?(?=\n##|\n#|$)/gi, "")
+    .replace(/##\s*Counterevidence[\s\S]*?(?=\n##|\n#|$)/gi, "");
+  const wordCount = findingsAndAnalysis.split(/\s+/).filter(Boolean).length;
+  const citationCount = (findingsAndAnalysis.match(/\[\d+(?:\s*,\s*\d+)*\]/g) ?? []).length;
+  if (wordCount >= 200 && citationCount < Math.floor(wordCount / 200)) {
+    issues.push("low-citation-density");
+  }
+
+  // 4. Follow-up Questions section present
+  if (!report.match(/##\s*Follow-up Questions/i)) {
+    issues.push("missing-followups");
+  }
+
+  return issues;
+}
+
+// Build a search query for finding related vault entries. Prefer high-signal
+// terms from the user query, dropping common research filler words.
+function buildSearchTermsForLinking(query: string): string {
+  const terms = extractQueryTerms(query);
+  return terms.length > 0 ? terms.join(" ") : query;
+}
+
+// Extract a vault key from a search hit. The /vault/search endpoint returns
+// semantic memory documents whose metadata may or may not contain a vault key.
+function extractVaultKeyFromHit(hit: { id?: string; metadata?: any; content?: string }): string | null {
+  // Heuristic 1: metadata.vaultKey or metadata.key
+  if (hit.metadata?.vaultKey && typeof hit.metadata.vaultKey === "string") return hit.metadata.vaultKey;
+  if (hit.metadata?.key && typeof hit.metadata.key === "string") return hit.metadata.key;
+  // Heuristic 2: content first line matches the vault key path pattern
+  const firstLine = (hit.content ?? "").split("\n", 1)[0];
+  const m = firstLine.match(/^(research|memory|workflow|prompt|execution|file|credential)\/[a-z0-9\-/]+/i);
+  if (m) return m[0];
+  return null;
+}
+
 // Group Live Search citations by source type (X, news, web) for readability.
 function formatLiveCitations(urls: string[]): string {
   const groups: Record<string, string[]> = { "X (Twitter)": [], "News": [], "Web": [] };
@@ -656,6 +726,31 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
     return { content: [{ type: "text", text: `Synthesis failed: ${err.message ?? err}` }], isError: true };
   }
 
+  // ── Stage 6b: structural output validation ──
+  // Verify the report contains the required sections + adequate citation
+  // density. If 2+ checks fail, retry synthesis once with stricter prompt.
+  const issues = validateReportStructure(report);
+  if (issues.length >= 2) {
+    log(`🔧 Output validation found ${issues.length} issues (${issues.join(", ")}). Retrying synthesis with stricter prompt...`);
+    try {
+      const retryResult = await synthesize(query, sources, true, liveSearch);
+      const retryIssues = validateReportStructure(retryResult.report);
+      if (retryIssues.length < issues.length) {
+        report = retryResult.report;
+        if (retryResult.liveCitations.length > 0) liveCitations = retryResult.liveCitations;
+        log(`✅ Retry improved — ${retryIssues.length} issues remaining.`);
+      } else {
+        log(`⚠️ Retry didn't improve — keeping original.`);
+      }
+    } catch {
+      log(`⚠️ Retry failed — keeping original output.`);
+    }
+  } else if (issues.length > 0) {
+    log(`⚠️ Output has minor issues: ${issues.join(", ")}.`);
+  } else {
+    log(`✅ Output structure validated.`);
+  }
+
   // Append sources list with snippets
   const sourcesSection = sources
     .map((s) => {
@@ -688,9 +783,61 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
     } catch { /* keep going — return report inline */ }
   }
 
+  // ── Stage 8: vault auto-linking — connect this report to related research ──
+  // This is what makes Noelclaw deep_research compound over time. Every new
+  // report finds related past reports in your vault and creates typed links,
+  // so your knowledge base grows into a connected graph (vault_related to
+  // explore it). Best-effort — failure here never blocks the report.
+  const linkedKeys: string[] = [];
+  if (vaultKey && saveToVault) {
+    try {
+      const searchTerms = buildSearchTermsForLinking(query);
+      log(`🔗 Searching vault for related research (terms: ${searchTerms.slice(0, 60)}...)`);
+      const searchResult = (await callConvex("/vault/search", "POST", {
+        q: searchTerms,
+        n: 8,
+      }, "vault_search")) as { results?: Array<{ id?: string; metadata?: { title?: string }; content?: string }> } | null;
+
+      const hits = (searchResult?.results ?? [])
+        .map((r) => ({
+          // The /vault/search endpoint returns documents from the semantic
+          // memory layer, not vault keys directly. We need to extract vault
+          // keys from the metadata when present.
+          key: extractVaultKeyFromHit(r),
+          title: r.metadata?.title ?? "(untitled)",
+        }))
+        .filter((h): h is { key: string; title: string } => !!h.key && h.key !== vaultKey)
+        .slice(0, 3);
+
+      if (hits.length > 0) {
+        for (const hit of hits) {
+          try {
+            await callConvex("/vault/link", "POST", {
+              fromKey: vaultKey,
+              toKey: hit.key,
+              relation: "related",
+            }, "vault_link");
+            linkedKeys.push(hit.key);
+          } catch { /* skip individual link failures */ }
+        }
+        log(`✅ Linked to ${linkedKeys.length} related vault entr${linkedKeys.length === 1 ? "y" : "ies"}.`);
+      } else {
+        log(`✅ No related vault entries found — this is a fresh research thread.`);
+      }
+    } catch {
+      // Vault auto-linking is purely additive — silent failure is fine
+      log(`⚠️ Vault auto-link skipped (search unavailable).`);
+    }
+  }
+
+  const linkedSection = linkedKeys.length > 0
+    ? `🔗 Auto-linked to ${linkedKeys.length} related research entr${linkedKeys.length === 1 ? "y" : "ies"} in your vault:\n${linkedKeys.map((k) => `   • \`${k}\``).join("\n")}`
+    : "";
+
   const header = [
-    `🔬 **Deep Research v2** — depth: ${depth} · ${subQs.length} planned + ${useReflection ? "reflection" : "no reflection"} · ${sources.length} scraped sources${liveCitations.length > 0 ? ` · ${liveCitations.length} live` : ""}${liveSearch ? ` · 🛰 Live Search [${liveSearch.sources.join(",")}]` : ""}`,
+    `🔬 **Deep Research v3** — depth: ${depth} · ${subQs.length} planned + ${useReflection ? "reflection" : "no reflection"} · ${sources.length} scraped sources${liveCitations.length > 0 ? ` · ${liveCitations.length} live` : ""}${liveSearch ? ` · 🛰 Live Search [${liveSearch.sources.join(",")}]` : ""}`,
     vaultKey ? `📁 Saved to vault: \`${vaultKey}\`` : (saveToVault ? `⚠️ Vault save skipped (not authenticated — sign in with \`noelclaw login\`)` : ""),
+    linkedSection,
     ``,
     `<details><summary>📋 Process log</summary>`,
     ``,
