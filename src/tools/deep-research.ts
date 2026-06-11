@@ -21,6 +21,12 @@ const DOMAIN_TIER_BONUS: Array<[RegExp, number]> = [
   [/(?:medium|substack|reddit|twitter|x)\.com/i, -1],
 ];
 
+// News-domain bonus — applied additionally in fresh mode
+const NEWS_DOMAIN_BOOST_RE = /(?:reuters|apnews|bbc|economist|ft|wsj|bloomberg|cnbc|theverge|techcrunch|axios|coindesk|theinformation|nytimes|guardian|aljazeera)\.com/i;
+
+// Keywords that signal a time-sensitive query — trigger fresh mode auto.
+const FRESH_TRIGGER_RE = /\b(today|tonight|tomorrow|yesterday|this week|last week|past week|latest|breaking|just now|recent|currently|now|live|happening|this month|last month|past month|past \d+ days?|last \d+ days?|q[1-4]|h[12]|202[6-9])\b/i;
+
 // ─── Tool schema ──────────────────────────────────────────────────────────────
 
 export const DEEP_RESEARCH_TOOLS: Tool[] = [
@@ -64,6 +70,14 @@ export const DEEP_RESEARCH_TOOLS: Tool[] = [
           type: "string",
           description: "Vault key of a previous deep_research report to build on. When provided, the planner focuses on UPDATES, GAPS, and NEW developments since that report — not re-treading covered ground. The new report explicitly references and extends the prior findings. Format: 'research/...' (use vault_list type:research to find candidates). This is the multi-session research feature — Perplexity / ChatGPT Deep Research don't have an equivalent.",
         },
+        freshMode: {
+          type: "boolean",
+          description: "Force time-sensitive research mode: planner appends recency hints to sub-queries, source ranking boosts news domains (Reuters, AP, Bloomberg, etc.), and the synthesizer is told to prioritize current/recent claims. Auto-enabled when the query contains time-sensitive keywords (today, latest, breaking, this week, etc.).",
+        },
+        freshDays: {
+          type: "number",
+          description: "When freshMode is on, restrict to results from the last N days. Default 14 days. Capped at 90.",
+        },
         liveSearch: {
           type: "boolean",
           description: "Enable Grok Live Search — pulls real-time results from X (Twitter), news, web, RSS during synthesis. Only works when Grok is the active LLM provider. Adds ~5-15s per Grok call. Default: auto (on when Grok is active).",
@@ -89,6 +103,8 @@ const InputSchema = z.object({
   depth: z.enum(["fast", "standard", "deep"]).optional(),
   focus: z.string().max(80).optional(),
   continueFrom: z.string().max(200).optional(),
+  freshMode: z.boolean().optional(),
+  freshDays: z.number().int().min(1).max(90).optional(),
   liveSearch: z.boolean().optional(),
   liveSearchSources: z.array(z.enum(["web", "x", "news", "rss"])).optional(),
   liveSearchDays: z.number().int().min(1).max(365).optional(),
@@ -183,6 +199,16 @@ const STOPWORDS = new Set([
   "your","yours","their","they","them","there","here","just","also","more","most",
 ]);
 
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function currentYearMonth(): string {
+  const now = new Date();
+  const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  return `${months[now.getMonth()]} ${now.getFullYear()}`;
+}
+
 // ─── Firecrawl ────────────────────────────────────────────────────────────────
 
 async function fcSearch(query: string, limit: number): Promise<Array<{ url: string; title: string; description?: string }>> {
@@ -227,9 +253,19 @@ async function fcScrape(url: string): Promise<{ markdown: string; publishedAt?: 
 
 // ─── LLM stages ───────────────────────────────────────────────────────────────
 
-async function planQueries(query: string, n: number, focus?: string, priorContext?: string): Promise<string[]> {
+async function planQueries(query: string, n: number, focus?: string, priorContext?: string, freshMode?: { days: number }): Promise<string[]> {
   const focusNote = focus ? ` Focus angle: ${focus}.` : "";
   const sys = "You are a research planner. Output strict JSON only — no preamble, no markdown.";
+
+  const freshNote = freshMode
+    ? `
+
+⏱ FRESH MODE — last ${freshMode.days} days:
+- Add a recency hint to most sub-questions: "in ${currentYearMonth()}", "last ${freshMode.days} days", "this week", "as of ${todayISO()}", etc.
+- Prefer queries that surface news / press releases / X posts over evergreen background.
+- Skip generic background — the user wants what's CURRENT, not historical.
+- At least 70% of sub-questions must include a date or recency token.`
+    : "";
 
   const continuationNote = priorContext
     ? `
@@ -249,7 +285,7 @@ Your sub-questions must focus on:
 DO NOT re-tread material already well-covered in the prior report. The user already has those answers.`
     : "";
 
-  const user = `Decompose this research question into ${n} sub-questions that together cover the topic from different angles.${focusNote}${continuationNote}
+  const user = `Decompose this research question into ${n} sub-questions that together cover the topic from different angles.${focusNote}${continuationNote}${freshNote}
 
 Rules:
 - Each sub-question must be a standalone web search query, under 90 chars.
@@ -317,6 +353,7 @@ async function synthesize(
   isFinal: boolean,
   liveSearch?: LiveSearchOptions,
   priorContext?: { key: string; content: string },
+  freshMode?: boolean,
 ): Promise<{ report: string; liveCitations: string[] }> {
   const sourceBlocks = sources
     .map((s) => {
@@ -402,6 +439,16 @@ STYLE RULES:
 - No hedging when evidence is strong; no false confidence when it's weak
 - Don't write a Sources section — that gets appended automatically`;
 
+  const freshBlock = freshMode && isFinal
+    ? `
+
+⏱ FRESH MODE active — today is ${todayISO()}:
+- Prioritize claims dated within the last 30 days. If a source is older, only cite it if it's primary evidence (data, official statement).
+- In the At a Glance table, include a "Date" column showing the publish date for each metric.
+- In Key Findings, prefix each bullet with the source's publish date in brackets: [2026-MM-DD] Finding text [N].
+- In Counterevidence, flag any claim whose evidence is older than 60 days as "(potentially stale).".`
+    : "";
+
   const continuationBlock = priorContext && isFinal
     ? `
 
@@ -424,7 +471,7 @@ Do not re-explain background already in the prior report. Assume the reader read
   const user = `RESEARCH QUESTION: ${query}
 
 SOURCES:
-${sourceBlocks}${liveSearchNote}${continuationBlock}
+${sourceBlocks}${liveSearchNote}${continuationBlock}${freshBlock}
 
 Write the ${isFinal ? "final" : "draft"} report now. Markdown only — no preamble, no postamble.`;
 
@@ -569,11 +616,14 @@ function formatLiveCitations(urls: string[]): string {
 
 function rankAndDedupe(
   candidates: Array<{ url: string; title: string; desc: string; queryRank: number }>,
+  freshMode?: boolean,
 ): Array<{ url: string; title: string; desc: string }> {
   // Score: search-rank inverse + domain tier bonus. Lower queryRank = higher.
+  // In fresh mode, give news domains an extra +2 boost so recent reporting
+  // ranks above evergreen content.
   const scored = candidates.map((c) => ({
     ...c,
-    score: -c.queryRank + tierBonus(c.url),
+    score: -c.queryRank + tierBonus(c.url) + (freshMode && NEWS_DOMAIN_BOOST_RE.test(c.url) ? 2 : 0),
     domain: domainOf(c.url),
   }));
   scored.sort((a, b) => b.score - a.score);
@@ -606,6 +656,12 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
   const { query, focus, continueFrom } = parsed.data;
   const depth = parsed.data.depth ?? "standard";
   const saveToVault = parsed.data.saveToVault ?? true;
+
+  // Fresh mode: auto-detect from query unless explicitly set.
+  const freshModeAuto = FRESH_TRIGGER_RE.test(query);
+  const freshMode = parsed.data.freshMode ?? freshModeAuto;
+  const freshDays = parsed.data.freshDays ?? 14;
+  const freshConfig = freshMode ? { days: freshDays } : undefined;
 
   // Live Search resolution — opt-in only when Grok is the active provider.
   // Default: enable when Grok is active (smart default — they paid for the
@@ -653,6 +709,10 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
     log(`🛰  Live Search: ON · sources=[${liveSearch.sources.join(", ")}] · max=${liveSearch.maxResults}${liveSearch.fromDate ? ` · since=${liveSearch.fromDate}` : ""}`);
   }
 
+  if (freshMode) {
+    log(`⏱ Fresh mode: ON · last ${freshDays} days · news-domain boost active${freshModeAuto && !parsed.data.freshMode ? " (auto-detected from query)" : ""}`);
+  }
+
   // ── Stage 0: load prior report (continueFrom) ──
   let priorContext: { key: string; content: string } | undefined;
   if (continueFrom) {
@@ -676,8 +736,8 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
   }
 
   // ── Stage 1: plan ──
-  log(`🧭 Planning ${subN} sub-questions${priorContext ? " (continuation mode — focusing on updates/gaps/new)" : ""}...`);
-  const subQs = await planQueries(query, subN, focus, priorContext?.content);
+  log(`🧭 Planning ${subN} sub-questions${priorContext ? " (continuation mode)" : ""}${freshMode ? " (fresh mode)" : ""}...`);
+  const subQs = await planQueries(query, subN, focus, priorContext?.content, freshConfig);
 
   // ── Stage 2: parallel search ──
   log(`🔎 Searching ${subQs.length} queries × ${searchLimit} results each...`);
@@ -695,8 +755,8 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
     return { content: [{ type: "text", text: `No sources found for: "${query}". Try a more specific query or a different focus angle.` }], isError: true };
   }
 
-  const ranked = rankAndDedupe(allCandidates).slice(0, maxScrape);
-  log(`📊 Ranked ${allCandidates.length} candidates → ${ranked.length} after domain dedup (max ${MAX_PER_DOMAIN}/domain).`);
+  const ranked = rankAndDedupe(allCandidates, freshMode).slice(0, maxScrape);
+  log(`📊 Ranked ${allCandidates.length} candidates → ${ranked.length} after domain dedup (max ${MAX_PER_DOMAIN}/domain)${freshMode ? " + news-domain boost" : ""}.`);
 
   // ── Stage 3: parallel scrape ──
   log(`📥 Scraping ${ranked.length} sources in parallel...`);
@@ -755,7 +815,7 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
           }
         });
       }
-      const gapRanked = rankAndDedupe(gapCandidates).slice(0, gapQs.length * 2);
+      const gapRanked = rankAndDedupe(gapCandidates, freshMode).slice(0, gapQs.length * 2);
       const gapScraped = await Promise.all(
         gapRanked.map(async (c) => {
           const r = await fcScrape(c.url);
@@ -781,11 +841,11 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
   }
 
   // ── Stage 6: final synthesis ──
-  log(`📝 Writing final report from ${sources.length} sources${liveSearch ? " + Live Search" : ""}${priorContext ? ` (continuing \`${priorContext.key}\`)` : ""}...`);
+  log(`📝 Writing final report from ${sources.length} sources${liveSearch ? " + Live Search" : ""}${priorContext ? ` (continuing \`${priorContext.key}\`)` : ""}${freshMode ? " (fresh)" : ""}...`);
   let report: string;
   let liveCitations: string[] = [];
   try {
-    const finalResult = await synthesize(query, sources, true, liveSearch, priorContext);
+    const finalResult = await synthesize(query, sources, true, liveSearch, priorContext, freshMode);
     report = finalResult.report;
     liveCitations = finalResult.liveCitations;
   } catch (err: any) {
@@ -799,7 +859,7 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
   if (issues.length >= 2) {
     log(`🔧 Output validation found ${issues.length} issues (${issues.join(", ")}). Retrying synthesis with stricter prompt...`);
     try {
-      const retryResult = await synthesize(query, sources, true, liveSearch, priorContext);
+      const retryResult = await synthesize(query, sources, true, liveSearch, priorContext, freshMode);
       const retryIssues = validateReportStructure(retryResult.report);
       if (retryIssues.length < issues.length) {
         report = retryResult.report;
@@ -926,7 +986,7 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
     : "";
 
   const header = [
-    `🔬 **Deep Research v3** — depth: ${depth} · ${subQs.length} planned + ${useReflection ? "reflection" : "no reflection"} · ${sources.length} scraped sources${liveCitations.length > 0 ? ` · ${liveCitations.length} live` : ""}${liveSearch ? ` · 🛰 Live Search [${liveSearch.sources.join(",")}]` : ""}`,
+    `🔬 **Deep Research v3** — depth: ${depth} · ${subQs.length} planned + ${useReflection ? "reflection" : "no reflection"} · ${sources.length} scraped sources${liveCitations.length > 0 ? ` · ${liveCitations.length} live` : ""}${liveSearch ? ` · 🛰 Live Search [${liveSearch.sources.join(",")}]` : ""}${freshMode ? ` · ⏱ fresh:${freshDays}d` : ""}`,
     vaultKey ? `📁 Saved to vault: \`${vaultKey}\`` : (saveToVault ? `⚠️ Vault save skipped (not authenticated — sign in with \`noelclaw login\`)` : ""),
     continuationSection,
     linkedSection,
