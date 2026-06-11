@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { ToolResult } from "../types.js";
-import { callLLM } from "../llm.js";
+import { callLLM, isGrokActive, type LiveSearchOptions, type LiveSearchSource } from "../llm.js";
 import { callConvex } from "../convex.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -32,6 +32,9 @@ export const DEEP_RESEARCH_TOOLS: Tool[] = [
       "self-critiques to find gaps, searches once more for the gaps, then writes " +
       "a final structured Markdown report with inline [N] citations and follow-up " +
       "questions. Auto-saves to vault as type:research. Requires FIRECRAWL_API_KEY. " +
+      "When using Grok as the LLM provider, can also enable Live Search to pull " +
+      "real-time results from X (Twitter), news, and the web directly during " +
+      "synthesis — toggle with `liveSearch=true`. " +
       "Use for: market analysis, competitor research, technical investigation, " +
       "news synthesis, due diligence. Cost per run: 3-5 LLM calls + 6-15 web " +
       "searches + 10-20 page scrapes. Takes 60-180s depending on depth.",
@@ -51,6 +54,19 @@ export const DEEP_RESEARCH_TOOLS: Tool[] = [
           type: "string",
           description: "Optional angle hint — 'technical', 'investment', 'news', 'comparison'. Steers planning.",
         },
+        liveSearch: {
+          type: "boolean",
+          description: "Enable Grok Live Search — pulls real-time results from X (Twitter), news, web, RSS during synthesis. Only works when Grok is the active LLM provider. Adds ~5-15s per Grok call. Default: auto (on when Grok is active).",
+        },
+        liveSearchSources: {
+          type: "array",
+          items: { type: "string", enum: ["web", "x", "news", "rss"] },
+          description: "Which Live Search sources to pull from. Default: ['web', 'x', 'news']. Only respected when liveSearch is true and Grok is active.",
+        },
+        liveSearchDays: {
+          type: "number",
+          description: "Restrict Live Search to results from the last N days (max 365). Useful for time-sensitive queries. Default: no date filter.",
+        },
         saveToVault: { type: "boolean", description: "Auto-save report to vault (default true)" },
       },
       required: ["query"],
@@ -62,6 +78,9 @@ const InputSchema = z.object({
   query: z.string().min(3).max(500),
   depth: z.enum(["fast", "standard", "deep"]).optional(),
   focus: z.string().max(80).optional(),
+  liveSearch: z.boolean().optional(),
+  liveSearchSources: z.array(z.enum(["web", "x", "news", "rss"])).optional(),
+  liveSearchDays: z.number().int().min(1).max(365).optional(),
   saveToVault: z.boolean().optional(),
 });
 
@@ -262,13 +281,32 @@ Return: {"gap_queries": ["...", "..."]} — exactly ${n} items, no duplicates of
     .slice(0, n);
 }
 
-async function synthesize(query: string, sources: Source[], isFinal: boolean): Promise<string> {
+async function synthesize(
+  query: string,
+  sources: Source[],
+  isFinal: boolean,
+  liveSearch?: LiveSearchOptions,
+): Promise<{ report: string; liveCitations: string[] }> {
   const sourceBlocks = sources
     .map((s) => {
       const dateNote = s.publishedAt ? ` (published ${s.publishedAt.slice(0, 10)})` : "";
       return `[${s.n}] ${s.title} — ${s.domain}${dateNote}\nURL: ${s.url}\n\n${s.excerpt}`;
     })
     .join("\n\n---\n\n");
+
+  const liveSearchNote = liveSearch
+    ? `\n\nIMPORTANT — Real-time augmentation:
+You have Live Search enabled. In addition to the numbered sources above, you have access to **real-time results from ${liveSearch.sources.join(", ")}**. Use them to:
+1. Verify recent claims (last ${liveSearch.fromDate ? "from " + liveSearch.fromDate : "few weeks"})
+2. Add fresh data points the static sources may have missed
+3. Surface X (Twitter) posts when the topic is moving quickly
+4. Pull current numbers when the static sources are dated
+
+CITATION RULE for Live Search content:
+- Numbered sources [N] = static scraped sources at top of prompt
+- Real-time content from Live Search: cite inline as **(X post)** or **(news, [outlet])** WITHOUT [N] numbering — they'll be appended to the Sources section automatically
+- If a Live Search result contradicts a static source, FLAG it as "(real-time conflicts with [N])"`
+    : "";
 
   const finalSections = isFinal
     ? `## TL;DR
@@ -336,16 +374,17 @@ STYLE RULES:
   const user = `RESEARCH QUESTION: ${query}
 
 SOURCES:
-${sourceBlocks}
+${sourceBlocks}${liveSearchNote}
 
 Write the ${isFinal ? "final" : "draft"} report now. Markdown only — no preamble, no postamble.`;
 
-  const report = await callLLM(sys, user, isFinal ? 4000 : 2000, [], 90_000);
+  const raw = await callLLM(sys, user, isFinal ? 4000 : 2000, [], 90_000, { liveSearch });
+  const { content: report, liveCitations } = extractLiveCitations(raw);
 
   // Citation density check — only for final reports. If the report has many
   // numerical claims but very few [N] citations, retry once with a stricter
   // instruction. Cheap insurance against lazy synthesis.
-  if (!isFinal) return report;
+  if (!isFinal) return { report, liveCitations };
 
   const density = measureCitationDensity(report);
   if (density.numericalClaims >= 5 && density.citations < Math.max(3, density.numericalClaims / 2)) {
@@ -353,13 +392,24 @@ Write the ${isFinal ? "final" : "draft"} report now. Markdown only — no preamb
 
 ⚠️ Your previous draft had ${density.numericalClaims} numerical claims but only ${density.citations} [N] citations. That ratio is too low. Rewrite with stricter citation density: every percentage, dollar amount, count, date, and named entity must carry [N]. Use the At a Glance table to anchor the key metrics.`;
     try {
-      return await callLLM(sys, retryUser, 4000, [], 90_000);
+      const rawRetry = await callLLM(sys, retryUser, 4000, [], 90_000, { liveSearch });
+      const { content: retryReport, liveCitations: retryCitations } = extractLiveCitations(rawRetry);
+      return { report: retryReport, liveCitations: retryCitations.length > 0 ? retryCitations : liveCitations };
     } catch {
-      return report; // fall back to original if retry fails
+      return { report, liveCitations };
     }
   }
 
-  return report;
+  return { report, liveCitations };
+}
+
+// Strip the GROK_LIVE_CITATIONS sentinel block (added by callGrok when Live
+// Search ran) and return the citation URLs separately.
+function extractLiveCitations(raw: string): { content: string; liveCitations: string[] } {
+  const match = raw.match(/<!--GROK_LIVE_CITATIONS\n([\s\S]*?)\nGROK_LIVE_CITATIONS-->/);
+  if (!match) return { content: raw, liveCitations: [] };
+  const urls = match[1].split("\n").map((u) => u.trim()).filter(Boolean);
+  return { content: raw.replace(match[0], "").trimEnd(), liveCitations: urls };
 }
 
 function measureCitationDensity(report: string): { numericalClaims: number; citations: number; namedEntities: number } {
@@ -378,6 +428,27 @@ function measureCitationDensity(report: string): { numericalClaims: number; cita
   const namedEntities = (report.match(/\b[A-Z][a-z]+(?:[A-Z][a-z]+|\s+[A-Z][a-z]+)\b/g) ?? []).length;
 
   return { numericalClaims, citations, namedEntities };
+}
+
+// Group Live Search citations by source type (X, news, web) for readability.
+function formatLiveCitations(urls: string[]): string {
+  const groups: Record<string, string[]> = { "X (Twitter)": [], "News": [], "Web": [] };
+  for (const url of urls) {
+    if (/x\.com|twitter\.com/i.test(url)) groups["X (Twitter)"].push(url);
+    else if (/(reuters|apnews|bbc|cnbc|bloomberg|theverge|techcrunch|wsj|ft|nytimes|coindesk|axios|economist)\.com/i.test(url)) groups["News"].push(url);
+    else groups["Web"].push(url);
+  }
+  const lines: string[] = [];
+  for (const [label, list] of Object.entries(groups)) {
+    if (list.length === 0) continue;
+    lines.push(`**${label}** (${list.length}):`);
+    for (const url of list.slice(0, 8)) {
+      lines.push(`- ${url}`);
+    }
+    if (list.length > 8) lines.push(`- _…and ${list.length - 8} more_`);
+    lines.push("");
+  }
+  return lines.join("\n").trimEnd();
 }
 
 // ─── Source ranking ───────────────────────────────────────────────────────────
@@ -422,6 +493,22 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
   const depth = parsed.data.depth ?? "standard";
   const saveToVault = parsed.data.saveToVault ?? true;
 
+  // Live Search resolution — opt-in only when Grok is the active provider.
+  // Default: enable when Grok is active (smart default — they paid for the
+  // feature, use it), disable otherwise (other providers ignore it anyway).
+  const grokActive = isGrokActive();
+  const liveSearchEnabled = (parsed.data.liveSearch ?? grokActive) && grokActive;
+  const liveSearch: LiveSearchOptions | undefined = liveSearchEnabled
+    ? {
+        mode: "on",
+        sources: (parsed.data.liveSearchSources as LiveSearchSource[] | undefined) ?? ["web", "x", "news"],
+        maxResults: depth === "fast" ? 8 : depth === "deep" ? 18 : 12,
+        fromDate: parsed.data.liveSearchDays
+          ? new Date(Date.now() - parsed.data.liveSearchDays * 86_400_000).toISOString().slice(0, 10)
+          : undefined,
+      }
+    : undefined;
+
   if (!process.env.FIRECRAWL_API_KEY) {
     return {
       content: [{
@@ -447,6 +534,10 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
   const queryTerms = extractQueryTerms(query);
   const progress: string[] = [];
   const log = (line: string) => progress.push(line);
+
+  if (liveSearch) {
+    log(`🛰  Live Search: ON · sources=[${liveSearch.sources.join(", ")}] · max=${liveSearch.maxResults}${liveSearch.fromDate ? ` · since=${liveSearch.fromDate}` : ""}`);
+  }
 
   // ── Stage 1: plan ──
   log(`🧭 Planning ${subN} sub-questions...`);
@@ -504,7 +595,8 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
   if (useReflection) {
     log(`✍️  Drafting initial report (will reflect & refine)...`);
     try {
-      draft = await synthesize(query, sources, false);
+      const draftResult = await synthesize(query, sources, false, liveSearch);
+      draft = draftResult.report;
     } catch {
       // If draft fails, fall through to final synth with what we have
       draft = "";
@@ -553,10 +645,13 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
   }
 
   // ── Stage 6: final synthesis ──
-  log(`📝 Writing final report from ${sources.length} sources...`);
+  log(`📝 Writing final report from ${sources.length} sources${liveSearch ? " + Live Search" : ""}...`);
   let report: string;
+  let liveCitations: string[] = [];
   try {
-    report = await synthesize(query, sources, true);
+    const finalResult = await synthesize(query, sources, true, liveSearch);
+    report = finalResult.report;
+    liveCitations = finalResult.liveCitations;
   } catch (err: any) {
     return { content: [{ type: "text", text: `Synthesis failed: ${err.message ?? err}` }], isError: true };
   }
@@ -569,7 +664,13 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
       return `[${s.n}] **${s.title}** — ${s.domain}${date}${tier}\n   ${s.url}`;
     })
     .join("\n\n");
-  const fullReport = `${report.trim()}\n\n## Sources\n\n${sourcesSection}`;
+
+  // Group live citations by source type for readability
+  const liveSection = liveCitations.length > 0
+    ? `\n\n### 🛰 Real-time sources (Live Search)\n\n${formatLiveCitations(liveCitations)}`
+    : "";
+
+  const fullReport = `${report.trim()}\n\n## Sources\n\n${sourcesSection}${liveSection}`;
 
   // ── Stage 7: vault save ──
   let vaultKey: string | null = null;
@@ -588,7 +689,7 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
   }
 
   const header = [
-    `🔬 **Deep Research v2** — depth: ${depth} · ${subQs.length} planned + ${useReflection ? "reflection" : "no reflection"} · ${sources.length} sources`,
+    `🔬 **Deep Research v2** — depth: ${depth} · ${subQs.length} planned + ${useReflection ? "reflection" : "no reflection"} · ${sources.length} scraped sources${liveCitations.length > 0 ? ` · ${liveCitations.length} live` : ""}${liveSearch ? ` · 🛰 Live Search [${liveSearch.sources.join(",")}]` : ""}`,
     vaultKey ? `📁 Saved to vault: \`${vaultKey}\`` : (saveToVault ? `⚠️ Vault save skipped (not authenticated — sign in with \`noelclaw login\`)` : ""),
     ``,
     `<details><summary>📋 Process log</summary>`,
