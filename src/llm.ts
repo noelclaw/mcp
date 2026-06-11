@@ -210,6 +210,9 @@ async function callGrok(
 
   // xAI Live Search — pulls real-time results from web/X/news/RSS during inference.
   // Docs: https://docs.x.ai/docs/guides/live-search
+  // Note: as of late 2026 xAI deprecated this in favor of Agent Tools API
+  // (returns 410 Gone). We detect that and retry without search_parameters
+  // so synthesis still succeeds — just without the real-time augmentation.
   if (liveSearch) {
     body.search_parameters = {
       mode: liveSearch.mode,
@@ -220,12 +223,23 @@ async function callGrok(
     };
   }
 
-  const res = await fetch(GROK_URL, {
+  let res = await fetch(GROK_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(timeoutMs),
   });
+
+  // Live Search deprecated → strip search_parameters and retry
+  if (res.status === 410 && liveSearch) {
+    delete (body as Record<string, unknown>).search_parameters;
+    res = await fetch(GROK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  }
 
   if (!res.ok) {
     const errBody = await res.text().catch(() => "");
@@ -239,9 +253,9 @@ async function callGrok(
 
   const content = data.choices?.[0]?.message?.content ?? "";
 
-  // When Live Search ran, append the citations as a parsable block at the
-  // bottom — downstream consumers (deep_research) can read these and merge
-  // into the final source list.
+  // When Live Search ran (and was not deprecated), append the citations as a
+  // parsable block at the bottom — downstream consumers (deep_research) can
+  // read these and merge into the final source list.
   if (liveSearch && data.citations && data.citations.length > 0) {
     return `${content}\n\n<!--GROK_LIVE_CITATIONS\n${data.citations.join("\n")}\nGROK_LIVE_CITATIONS-->`;
   }

@@ -1,0 +1,10 @@
+﻿fix: graceful fallback when xAI Live Search returns 410 (deprecated)
+
+Same fix as noelapp researchEngine — xAI deprecated search_parameters in
+favor of their Agent Tools API (returns 410 Gone). callGrok now strips
+the search_parameters field and retries on 410, so deep_research keeps
+working — just without the real-time Live Search augmentation.
+
+Bumps 3.11.0 -> 3.11.1. Already published to npm.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
