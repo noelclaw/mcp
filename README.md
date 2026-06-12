@@ -85,7 +85,7 @@ give me a bull vs bear thesis on ETH, save it
 
 ---
 
-## Tools (99 total)
+## Tools (102 total)
 
 | Category | Count | What it does |
 |----------|-------|-------------|
@@ -95,7 +95,8 @@ give me a bull vs bear thesis on ETH, save it
 | **Monitor** | 4 | Recurring autonomous research that saves findings automatically |
 | **Market** | 5 | Live crypto prices, token data, history |
 | **DeFi** | 6 | Portfolio, swaps, yields on Base |
-| **Research** | 2 | Web search + scrape |
+| **Research** | 5 | `deep_research`, `research_compare`, `research_chain`, `web_search`, `web_scrape` |
+| **AI Intel** | 3 | `ask_noel`, `market_thesis`, `trade_plan` |
 | **Swarm** | 5 | Multi-agent parallel research |
 | **Automation** | 6 | Scheduled tasks in plain English |
 | **Chronicle** | 2 | Persistent activity log |
@@ -185,7 +186,7 @@ Works without any API keys. Add keys to unlock more features:
 | `BANKR_API_KEY` | Use Bankr as LLM backend | Optional |
 | `ANTHROPIC_API_KEY` | Use your own Claude quota | Optional |
 | `NOELCLAW_MODEL` | Override AI model (default: `claude-haiku-4-5-20251001`) | Optional |
-| `FIRECRAWL_API_KEY` | Required for `web_search` and `web_scrape` | For research |
+| `FIRECRAWL_API_KEY` | Required for `deep_research` and `web_search`; optional for `web_scrape` (falls back to basic fetch) | For research |
 | `TRIGGER_SECRET_KEY` | Required for `schedule_research` / `create_monitor` | For monitors |
 | `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` | Monitor notifications via Telegram | Optional |
 | `ALCHEMY_API_KEY` | Faster Base chain queries and swap quotes | Optional |
