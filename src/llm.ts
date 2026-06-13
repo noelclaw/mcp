@@ -24,6 +24,14 @@ export interface LLMOptions {
    * For other providers this is silently ignored — the call proceeds normally.
    */
   liveSearch?: LiveSearchOptions;
+  /**
+   * Per-call model override. When set, takes precedence over NOELCLAW_MODEL
+   * and provider defaults. Useful when one tool (e.g. deep_research) wants a
+   * Grok model via Bankr for real-time search while the rest of the stack
+   * stays on Claude. Pass a Bankr-supported name like `grok-4.3` or
+   * `claude-sonnet-4-6`.
+   */
+  model?: string;
 }
 
 /**
@@ -65,14 +73,14 @@ export async function callLLM(
   const grokKey      = process.env.GROK_API_KEY;
 
   // Explicit provider override — user picked one
-  if (provider === "grok" && grokKey)           return callGrok(grokKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs, options.liveSearch);
-  if (provider === "anthropic" && anthropicKey) return callAnthropic(anthropicKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs);
-  if (provider === "bankr" && bankrKey)         return callBankr(bankrKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs);
+  if (provider === "grok" && grokKey)           return callGrok(grokKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs, options.liveSearch, options.model);
+  if (provider === "anthropic" && anthropicKey) return callAnthropic(anthropicKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs, options.model);
+  if (provider === "bankr" && bankrKey)         return callBankr(bankrKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs, options.model);
 
   // Auto priority
-  if (bankrKey)     return callBankr(bankrKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs);
-  if (anthropicKey) return callAnthropic(anthropicKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs);
-  if (grokKey)      return callGrok(grokKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs, options.liveSearch);
+  if (bankrKey)     return callBankr(bankrKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs, options.model);
+  if (anthropicKey) return callAnthropic(anthropicKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs, options.model);
+  if (grokKey)      return callGrok(grokKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs, options.liveSearch, options.model);
 
   // Fallback: route through Convex backend — owner covers cost
   return callViaConvex(systemPrompt, userPrompt, history, timeoutMs);
@@ -128,9 +136,10 @@ async function callAnthropic(
   maxTokens: number,
   history: ChatMessage[],
   timeoutMs: number,
+  modelOverride?: string,
 ): Promise<string> {
   const messages: ChatMessage[] = [...history, { role: "user", content: userPrompt }];
-  const model = process.env.NOELCLAW_MODEL ?? process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5-20251001";
+  const model = modelOverride ?? process.env.NOELCLAW_MODEL ?? process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5-20251001";
 
   const res = await fetch(ANTHROPIC_URL, {
     method: "POST",
@@ -159,8 +168,9 @@ async function callBankr(
   maxTokens: number,
   history: ChatMessage[],
   timeoutMs: number,
+  modelOverride?: string,
 ): Promise<string> {
-  const model = process.env.NOELCLAW_MODEL ?? process.env.BANKR_MODEL ?? "claude-haiku-4-5-20251001";
+  const model = modelOverride ?? process.env.NOELCLAW_MODEL ?? process.env.BANKR_MODEL ?? "claude-haiku-4-5-20251001";
 
   const res = await fetch(BANKR_URL, {
     method: "POST",
@@ -194,8 +204,9 @@ async function callGrok(
   history: ChatMessage[],
   timeoutMs: number,
   liveSearch?: LiveSearchOptions,
+  modelOverride?: string,
 ): Promise<string> {
-  const model = process.env.NOELCLAW_MODEL ?? process.env.GROK_MODEL ?? "grok-4-fast-reasoning";
+  const model = modelOverride ?? process.env.NOELCLAW_MODEL ?? process.env.GROK_MODEL ?? "grok-4-fast-reasoning";
 
   const body: Record<string, unknown> = {
     model,

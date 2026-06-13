@@ -10,6 +10,17 @@ import type { ChatMessage } from "./llm.js";
 
 const CONVEX_SITE = process.env.NOELCLAW_CONVEX_URL ?? "https://api.noelclaw.com";
 
+// Read version from package.json so the banner stays accurate without manual
+// edits on every release. CJS so __dirname is available.
+const PKG_VERSION: string = (() => {
+  try {
+    const raw = fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8");
+    return (JSON.parse(raw) as { version?: string }).version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+})();
+
 async function loginWithOtp(rl: readline.Interface): Promise<void> {
   const ask = (q: string) => new Promise<string>(resolve => rl.question(q, resolve));
 
@@ -113,7 +124,7 @@ ${C.cyan}${C.bold}  ██║╚██╗██║██║   ██║██╔
 ${C.cyan}${C.bold}  ██║ ╚████║╚██████╔╝███████╗███████╗╚██████╗███████╗██║  ██║╚███╔███╔╝${C.reset}
 ${C.cyan}${C.bold}  ╚═╝  ╚═══╝ ╚═════╝ ╚══════╝╚══════╝ ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝${C.reset}
 
-  ${C.dim}v3.16.4  ·  102 tools  ·  persistent AI OS  ·  noelclaw.com${C.reset}
+  ${C.dim}v${PKG_VERSION}  ·  102 tools  ·  persistent AI OS  ·  noelclaw.com${C.reset}
   ${C.dim}────────────────────────────────────────────────────────────${C.reset}
   ${C.dim}Type anything. /help for commands. Ctrl+C to exit.${C.reset}
 `;

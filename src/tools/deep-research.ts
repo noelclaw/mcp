@@ -507,7 +507,13 @@ ${sourceBlocks}${liveSearchNote}${continuationBlock}${freshBlock}
 
 Write the ${isFinal ? "final" : "draft"} report now. Markdown only — no preamble, no postamble.`;
 
-  const raw = await callLLM(sys, user, isFinal ? 4000 : 2000, [], 90_000, { liveSearch });
+  // Research synthesis uses NOELCLAW_RESEARCH_MODEL when set. Default is
+  // `grok-4.3` — when Bankr is the active gateway this routes to Grok 4.3
+  // through Bankr (Grok handles fresh data better; Claude is the safer
+  // pick for reasoning, JSON, code). Override via env or pass the same
+  // model string to NOELCLAW_MODEL to bypass.
+  const researchModel = process.env.NOELCLAW_RESEARCH_MODEL ?? "grok-4.3";
+  const raw = await callLLM(sys, user, isFinal ? 4000 : 2000, [], 90_000, { liveSearch, model: researchModel });
   const { content: report, liveCitations } = extractLiveCitations(raw);
 
   // Citation density check — only for final reports. If the report has many
@@ -521,7 +527,7 @@ Write the ${isFinal ? "final" : "draft"} report now. Markdown only — no preamb
 
 ⚠️ Your previous draft had ${density.numericalClaims} numerical claims but only ${density.citations} [N] citations. That ratio is too low. Rewrite with stricter citation density: every percentage, dollar amount, count, date, and named entity must carry [N]. Use the At a Glance table to anchor the key metrics.`;
     try {
-      const rawRetry = await callLLM(sys, retryUser, 4000, [], 90_000, { liveSearch });
+      const rawRetry = await callLLM(sys, retryUser, 4000, [], 90_000, { liveSearch, model: researchModel });
       const { content: retryReport, liveCitations: retryCitations } = extractLiveCitations(rawRetry);
       return { report: retryReport, liveCitations: retryCitations.length > 0 ? retryCitations : liveCitations };
     } catch {

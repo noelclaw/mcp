@@ -3,6 +3,20 @@ import { startServer, ALL_TOOLS } from "./server.js";
 import { getOrCreateWallet } from "./wallet.js";
 import { getSavedToken, writeConfig } from "./config.js";
 import * as readline from "readline";
+import * as fs from "fs";
+import * as path from "path";
+
+// Always read the version from package.json so banner + boot strings stay in
+// sync after every npm publish — no more hand-edits in three places.
+const PKG_VERSION: string = (() => {
+  try {
+    // dist/index.js → ../package.json (CJS so __dirname is available)
+    const raw = fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8");
+    return (JSON.parse(raw) as { version?: string }).version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+})();
 
 // â”€â”€ ANSI helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const C = {
@@ -74,7 +88,7 @@ async function main() {
     ? `Anthropic  ${C.dim}${model}${C.reset}`
     : `Noelclaw  ${C.dim}proxy Â· auto-auth${C.reset}`;
 
-  line("version", `v3.9.3  ${C.dim}MCP protocol 2.1.0${C.reset}`);
+  line("version", `v${PKG_VERSION}  ${C.dim}MCP protocol 2.1.0${C.reset}`);
   line("ai",       aiMode);
   line("tools",    `${C.white}${C.bold}${total} tools loaded${C.reset}  ${C.dim}across ${categories.length} categories${C.reset}`);
 
