@@ -3,6 +3,7 @@ import { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { ToolResult } from "../types.js";
 import { callLLM, isGrokActive, type LiveSearchOptions, type LiveSearchSource } from "../llm.js";
 import { callConvex } from "../convex.js";
+import { checkSignal } from "../signal-gate.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -212,18 +213,33 @@ function currentYearMonth(): string {
 // ─── Firecrawl ────────────────────────────────────────────────────────────────
 
 async function fcSearch(query: string, limit: number): Promise<Array<{ url: string; title: string; description?: string }>> {
+  // BYOK path — direct call to Firecrawl with user's key. Fastest, no proxy hop.
   const key = process.env.FIRECRAWL_API_KEY;
-  if (!key) return [];
+  if (key) {
+    try {
+      const res = await fetch(`${FC_BASE}/search`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+        body: JSON.stringify({ query, limit }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { data?: Array<{ url: string; title: string; description?: string }> };
+        return data.data ?? [];
+      }
+    } catch { /* fall through */ }
+  }
+
+  // Backend-proxy path — session-authed; Noelclaw covers Firecrawl cost.
   try {
-    const res = await fetch(`${FC_BASE}/search`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ query, limit }),
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) return [];
-    const data = (await res.json()) as { data?: Array<{ url: string; title: string; description?: string }> };
-    return data.data ?? [];
+    const data = await callConvex(
+      "/research/firecrawl-search",
+      "POST",
+      { query, limit },
+      "deep_research_search_proxy",
+      20_000,
+    ) as { results?: Array<{ url: string; title: string; description?: string }> } | null;
+    return data?.results ?? [];
   } catch {
     return [];
   }
@@ -231,24 +247,40 @@ async function fcSearch(query: string, limit: number): Promise<Array<{ url: stri
 
 async function fcScrape(url: string): Promise<{ markdown: string; publishedAt?: string } | null> {
   const key = process.env.FIRECRAWL_API_KEY;
-  if (!key) return null;
-  try {
-    const res = await fetch(`${FC_BASE}/scrape`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ url, formats: ["markdown"], onlyMainContent: true }),
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { data?: { markdown?: string; metadata?: { publishedAt?: string; ogPublishedTime?: string; "article:published_time"?: string } } };
-    const md = data.data?.markdown;
-    if (!md) return null;
-    const meta = data.data?.metadata;
-    const publishedAt = meta?.publishedAt ?? meta?.ogPublishedTime ?? meta?.["article:published_time"];
-    return { markdown: md, publishedAt };
-  } catch {
-    return null;
+  if (key) {
+    try {
+      const res = await fetch(`${FC_BASE}/scrape`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+        body: JSON.stringify({ url, formats: ["markdown"], onlyMainContent: true }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { data?: { markdown?: string; metadata?: { publishedAt?: string; ogPublishedTime?: string; "article:published_time"?: string } } };
+        const md = data.data?.markdown;
+        if (md) {
+          const meta = data.data?.metadata;
+          const publishedAt = meta?.publishedAt ?? meta?.ogPublishedTime ?? meta?.["article:published_time"];
+          return { markdown: md, publishedAt };
+        }
+      }
+    } catch { /* fall through */ }
   }
+
+  // Backend-proxy path. Returns markdown only — no metadata extraction yet,
+  // which means continueFrom can't auto-date proxied scrapes. Acceptable
+  // tradeoff for now; markdown is the primary signal.
+  try {
+    const data = await callConvex(
+      "/research/firecrawl-scrape",
+      "POST",
+      { url },
+      "deep_research_scrape_proxy",
+      25_000,
+    ) as { markdown?: string } | null;
+    if (data?.markdown) return { markdown: data.markdown };
+  } catch { /* swallow */ }
+  return null;
 }
 
 // ─── LLM stages ───────────────────────────────────────────────────────────────
@@ -679,20 +711,11 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
       }
     : undefined;
 
-  if (!process.env.FIRECRAWL_API_KEY) {
-    return {
-      content: [{
-        type: "text",
-        text: [
-          "⚠️ deep_research requires FIRECRAWL_API_KEY.",
-          "",
-          "Get a free key at firecrawl.dev, then add to your MCP config env block:",
-          `\`"FIRECRAWL_API_KEY": "fc-..."\``,
-        ].join("\n"),
-      }],
-      isError: true,
-    };
-  }
+  // No early FIRECRAWL_API_KEY gate — fcSearch/fcScrape transparently fall
+  // through to the Noelclaw backend proxy when the user is signed in but
+  // has no local key. If both paths fail, the search loop returns an empty
+  // source list and the synthesis stage produces the "insufficient signal"
+  // skip report instead of a fake summary.
 
   // Depth knobs
   const subN        = depth === "fast" ? 3 : depth === "deep" ? 7 : 5;
@@ -892,6 +915,33 @@ export async function handleDeepResearch(name: string, args: unknown): Promise<T
     : "";
 
   const fullReport = `${report.trim()}\n\n## Sources\n\n${sourcesSection}${liveSection}`;
+
+  // ── Stage 6.5: signal gate ──
+  // If the synthesis is thin (LLM admitted "search returned directory pages"
+  // or content has no concrete data), return an honest "insufficient signal"
+  // result instead of saving and citing a fake summary. The user can rerun
+  // with a sharper query.
+  const signal = checkSignal(report);
+  if (!signal.ok) {
+    const skipMsg = [
+      `## ⚠️ Insufficient signal`,
+      ``,
+      `**Query:** ${query}`,
+      `**Reason:** ${signal.reason}`,
+      `**Signal score:** ${signal.score.toFixed(2)} / 1.00`,
+      ``,
+      `The search results were too thin to produce a substantive report. Try a narrower or more recent query, or scope to a specific domain.`,
+      ``,
+      `<details><summary>Raw synthesis (saved for audit, not vault)</summary>`,
+      ``,
+      "```",
+      report.slice(0, 1500),
+      "```",
+      ``,
+      `</details>`,
+    ].join("\n");
+    return { content: [{ type: "text", text: skipMsg }] };
+  }
 
   // ── Stage 7: vault save ──
   let vaultKey: string | null = null;

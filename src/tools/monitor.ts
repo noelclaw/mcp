@@ -107,6 +107,63 @@ export async function handleMonitorTool(name: string, args: unknown): Promise<To
 
     const { topic, schedule, label } = parsed.data;
     const cron = resolveCron(schedule);
+
+    // Dedup gate — reject if the user already has a monitor with the exact
+    // same topic + schedule combo. Stops "track AI news daily" from being
+    // created 4× by an over-eager agent loop, which is what produced the
+    // duplicate Telegram briefings users complained about.
+    try {
+      const existingMonitors = await callConvex(
+        "/vault/list",
+        "POST",
+        { type: "workflow", tags: ["monitor-config"] },
+        "list_monitors_for_dedup",
+      ) as { entries?: Array<{ key: string; content?: string }> } | null;
+
+      const duplicates = (existingMonitors?.entries ?? []).filter((e) => {
+        try {
+          const cfg = JSON.parse(e.content ?? "{}");
+          const sameTopic = (cfg.topic ?? "").toLowerCase().trim() === topic.toLowerCase().trim();
+          const sameCron = (cfg.cron ?? "") === cron;
+          return sameTopic && sameCron;
+        } catch {
+          return false;
+        }
+      });
+
+      if (duplicates.length > 0) {
+        const existingIds = duplicates
+          .map((d) => {
+            try { return JSON.parse(d.content ?? "{}").scheduleId; } catch { return null; }
+          })
+          .filter(Boolean);
+        return {
+          content: [{
+            type: "text",
+            text: [
+              `⚠️ **Duplicate monitor blocked**`,
+              ``,
+              `You already have ${duplicates.length} active monitor${duplicates.length > 1 ? "s" : ""} for the exact topic + schedule:`,
+              `  • Topic:    ${topic}`,
+              `  • Schedule: ${schedule}`,
+              ``,
+              existingIds.length > 0
+                ? `Existing schedule ID${existingIds.length > 1 ? "s" : ""}: ${existingIds.map((id) => `\`${id}\``).join(", ")}`
+                : "",
+              ``,
+              `Cancel the old one first if you want to recreate:`,
+              `  \`cancel_monitor id: "<schedule_id>"\``,
+              ``,
+              `Or use a more specific topic to make this a distinct monitor.`,
+            ].filter(Boolean).join("\n"),
+          }],
+        };
+      }
+    } catch {
+      // Dedup check failed (auth or network) — continue, better to allow than
+      // block on infrastructure errors.
+    }
+
     // Unique stable ID — worker reads config from vault using this as key
     const externalId = `monitor-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 

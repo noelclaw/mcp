@@ -81,20 +81,56 @@ const TradePlanSchema = z.object({
   timeframe:     z.string().optional(),
 });
 
-const NOEL_BASE_PROMPT = `You are Noel, the core intelligence of the Noelclaw AI Operating System — an AI built to research, analyze, and execute across any domain. You are direct, sharp, and thorough. You draw on 82 tools covering persistent memory, multi-agent research, web search, workflow automation, code, and DeFi on Base. When asked anything, give your honest read backed by real reasoning. No filler, no disclaimers.`;
+const NOEL_BASE_PROMPT = `You are Noel, the core intelligence of the Noelclaw AI Operating System — an AI built to research, analyze, and execute across any domain. You are direct, sharp, and thorough. You draw on 102 tools covering persistent memory, multi-agent research, web search, workflow automation, code, and DeFi on Base. When asked anything, give your honest read backed by real reasoning. No filler, no disclaimers.
+
+When the user's vault or memory contains relevant prior research, build on it explicitly rather than starting from scratch. Reference vault entries by title when you cite them.`;
+
+type VaultHit = { key?: string; title?: string; type?: string; preview?: string };
+
+async function searchVault(question: string, limit = 3): Promise<VaultHit[]> {
+  try {
+    const data = await callConvex("/vault/search", "POST", { query: question, limit }, "ask_noel_vault");
+    const entries = (data as any)?.entries ?? (data as any)?.results ?? [];
+    return Array.isArray(entries) ? entries.slice(0, limit) : [];
+  } catch {
+    return [];
+  }
+}
 
 async function buildSystemPrompt(question: string): Promise<string> {
-  const memories = await searchSupermemory(question, 5);
-  if (!memories.length) return NOEL_BASE_PROMPT;
+  // Run memory + vault searches in parallel — both already fail gracefully
+  // (empty array on error) so neither call blocks the other.
+  const [memories, vaultHits] = await Promise.all([
+    searchSupermemory(question, 5),
+    searchVault(question, 3),
+  ]);
 
-  const memBlock = memories
-    .map(r => {
-      const title = r.metadata?.title ? `[${r.metadata.title}] ` : "";
-      return `- ${title}${r.content.slice(0, 250).replace(/\n/g, " ")}`;
-    })
-    .join("\n");
+  const blocks: string[] = [];
 
-  return `${NOEL_BASE_PROMPT}\n\n<user_memory>\nThe following is stored knowledge about this user — use it to personalize your response:\n${memBlock}\n</user_memory>`;
+  if (memories.length) {
+    const memBlock = memories
+      .map(r => {
+        const title = r.metadata?.title ? `[${r.metadata.title}] ` : "";
+        return `- ${title}${r.content.slice(0, 250).replace(/\n/g, " ")}`;
+      })
+      .join("\n");
+    blocks.push(`<user_memory>\nStored knowledge about this user — use it to personalize your response:\n${memBlock}\n</user_memory>`);
+  }
+
+  if (vaultHits.length) {
+    const vaultBlock = vaultHits
+      .map(v => {
+        const typeTag = v.type ? `(${v.type}) ` : "";
+        const title = v.title ?? v.key ?? "untitled";
+        const preview = (v.preview ?? "").slice(0, 300).replace(/\n/g, " ");
+        return `- ${typeTag}**${title}**${preview ? ` — ${preview}` : ""}`;
+      })
+      .join("\n");
+    blocks.push(`<user_vault>\nThe user already has these prior artifacts on closely related topics — build on them, don't repeat them:\n${vaultBlock}\n</user_vault>`);
+  }
+
+  if (blocks.length === 0) return NOEL_BASE_PROMPT;
+  return `${NOEL_BASE_PROMPT}\n\n${blocks.join("\n\n")}`;
 }
 
 async function fetchCgPrice(token: string): Promise<{ price: number; change24h: number; mcap: number; symbol: string } | null> {

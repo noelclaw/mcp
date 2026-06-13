@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { ToolResult } from "../types.js";
+import { callConvex } from "../convex.js";
 
 const FC_BASE = "https://api.firecrawl.dev/v1";
 
@@ -48,21 +49,33 @@ const SearchSchema = z.object({
 });
 
 async function firecrawlScrape(url: string): Promise<string | null> {
+  // Priority 1: user's own FIRECRAWL_API_KEY (BYOK fast-path, zero network detour).
   const key = process.env.FIRECRAWL_API_KEY;
-  if (!key) return null;
-  try {
-    const res = await fetch(`${FC_BASE}/scrape`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
-      body: JSON.stringify({ url, formats: ["markdown"], onlyMainContent: true }),
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (!res.ok) return null;
-    const data = await res.json() as any;
-    return data.data?.markdown ?? null;
-  } catch {
-    return null;
+  if (key) {
+    try {
+      const res = await fetch(`${FC_BASE}/scrape`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
+        body: JSON.stringify({ url, formats: ["markdown"], onlyMainContent: true }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (res.ok) {
+        const data = await res.json() as any;
+        return data.data?.markdown ?? null;
+      }
+    } catch { /* fall through to backend proxy */ }
   }
+
+  // Priority 2: route through Noelclaw backend (session-token authed, backend
+  // pays for the Firecrawl call). The backend returns 503 if it doesn't have
+  // FIRECRAWL_API_KEY set either, in which case web_scrape silently falls
+  // through to basicFetch below.
+  try {
+    const data = await callConvex("/research/firecrawl-scrape", "POST", { url }, "web_scrape_proxy", 25_000);
+    if (data?.markdown) return data.markdown as string;
+  } catch { /* fall through */ }
+
+  return null;
 }
 
 async function basicFetch(url: string): Promise<string | null> {
@@ -110,52 +123,68 @@ export async function handleResearchTool(name: string, args: unknown): Promise<T
     if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
     const { query, limit = 5 } = parsed.data;
 
+    // Priority 1: user BYOK direct path. Priority 2: Noelclaw proxy.
+    // Same data shape so the formatting code below is identical for both.
     const key = process.env.FIRECRAWL_API_KEY;
-    if (!key) {
-      return {
-        content: [{
-          type: "text",
-          text: [
-            `web_search requires FIRECRAWL_API_KEY.`,
-            ``,
-            `Get a free key at firecrawl.dev, then add to your MCP config:`,
-            `\`"env": { "FIRECRAWL_API_KEY": "fc-..." }\``,
-          ].join("\n"),
-        }],
-        isError: true,
-      };
+    let results: any[] | null = null;
+    let lastErr: string | null = null;
+
+    if (key) {
+      try {
+        const res = await fetch(`${FC_BASE}/search`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
+          body: JSON.stringify({ query, limit }),
+          signal: AbortSignal.timeout(15_000),
+        });
+        if (res.ok) {
+          const data = await res.json() as any;
+          results = data.data ?? [];
+        } else {
+          lastErr = `${res.status}: ${(await res.text()).slice(0, 200)}`;
+        }
+      } catch (err: any) {
+        lastErr = err?.message ?? "BYOK search failed";
+      }
     }
 
-    try {
-      const res = await fetch(`${FC_BASE}/search`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
-        body: JSON.stringify({ query, limit }),
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (!res.ok) {
-        const err = await res.text();
-        return { content: [{ type: "text", text: `Search failed: ${err}` }], isError: true };
+    if (!results) {
+      try {
+        const data = await callConvex("/research/firecrawl-search", "POST", { query, limit }, "web_search_proxy", 30_000);
+        results = data?.results ?? [];
+      } catch (err: any) {
+        const msg = err?.message ?? String(err);
+        return {
+          content: [{
+            type: "text",
+            text: [
+              `web_search failed.`,
+              ``,
+              `Tried backend proxy: ${msg.slice(0, 200)}`,
+              lastErr ? `Direct call also failed: ${lastErr}` : "",
+              ``,
+              `Fix: either run \`/login\` so the Noelclaw backend can pay, or set FIRECRAWL_API_KEY in your MCP env block.`,
+            ].filter(Boolean).join("\n"),
+          }],
+          isError: true,
+        };
       }
-      const data = await res.json() as any;
-      const results: any[] = data.data ?? [];
-
-      if (!results.length) {
-        return { content: [{ type: "text", text: `No results found for: "${query}"` }] };
-      }
-
-      const lines = [`🔍 **Web Search: "${query}"** — ${results.length} results\n`];
-      for (const r of results) {
-        lines.push(`**${r.title ?? r.url}**`);
-        lines.push(r.url);
-        if (r.description) lines.push(r.description.slice(0, 200));
-        lines.push("");
-      }
-
-      return { content: [{ type: "text", text: lines.join("\n") }] };
-    } catch (err: any) {
-      return { content: [{ type: "text", text: `Search error: ${err.message}` }], isError: true };
     }
+
+    const safeResults = results ?? [];
+    if (!safeResults.length) {
+      return { content: [{ type: "text", text: `No results found for: "${query}"` }] };
+    }
+
+    const lines = [`🔍 **Web Search: "${query}"** — ${safeResults.length} results\n`];
+    for (const r of safeResults) {
+      lines.push(`**${r.title ?? r.url}**`);
+      lines.push(r.url);
+      if (r.description) lines.push(r.description.slice(0, 200));
+      lines.push("");
+    }
+
+    return { content: [{ type: "text", text: lines.join("\n") }] };
   }
 
   return null;
