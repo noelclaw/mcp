@@ -4,6 +4,7 @@ import { ToolResult } from "../types.js";
 import { callLLM, isGrokActive, type LiveSearchOptions, type LiveSearchSource } from "../llm.js";
 import { callConvex } from "../convex.js";
 import { checkSignal } from "../signal-gate.js";
+import { enrichCryptoQuery } from "../crypto-enrichment.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -17,7 +18,13 @@ const DOMAIN_TIER_BONUS: Array<[RegExp, number]> = [
   [/\.gov(\b|\/|$)/i, 4],
   [/\.edu(\b|\/|$)/i, 3],
   [/(?:nature|science|nih|arxiv|acm|ieee|sciencedirect)\.(?:org|com)/i, 3],
+  // Crypto primary-source boost — these are the authoritative data sources
+  // for protocol TVL, yields, prices, and on-chain analytics. Rank above
+  // generic news for crypto queries.
+  [/(?:defillama|tokenterminal|coingecko|coinmarketcap|dune|messari|artemis)\.(?:com|fi)/i, 3],
+  [/(?:etherscan|basescan|arbiscan|solscan|polygonscan|optimistic\.etherscan)\.(?:io|com)/i, 2],
   [/(?:reuters|apnews|bbc|economist|ft|wsj|bloomberg)\.com/i, 2],
+  [/(?:coindesk|theblock|cointelegraph|decrypt|theinformation)\.(?:co|com|io)/i, 1],
   [/(?:wikipedia|github|stackoverflow)\.(?:org|com)/i, 1],
   [/(?:medium|substack|reddit|twitter|x)\.com/i, -1],
 ];
@@ -394,6 +401,13 @@ async function synthesize(
     })
     .join("\n\n---\n\n");
 
+  // Crypto enrichment — pull live primary-source data from DefiLlama +
+  // CoinGecko when the query is about a protocol/chain/token. The block
+  // gets prepended to source blocks and tagged as "AUTHORITATIVE LIVE DATA"
+  // so the LLM prefers these numbers over scraped web content (which often
+  // returns stale or secondary data).
+  const enrichment = isFinal ? await enrichCryptoQuery(query) : { context: "", hasData: false };
+
   const liveSearchNote = liveSearch
     ? `\n\nIMPORTANT — Real-time augmentation:
 You have Live Search enabled. In addition to the numbered sources above, you have access to **real-time results from ${liveSearch.sources.join(", ")}**. Use them to:
@@ -500,12 +514,20 @@ CONTINUATION RULES:
 Do not re-explain background already in the prior report. Assume the reader read it.`
     : "";
 
-  const user = `RESEARCH QUESTION: ${query}
+  const enrichmentBlock = enrichment.hasData
+    ? `\n\n${enrichment.context}\n\n`
+    : "";
 
+  const user = `RESEARCH QUESTION: ${query}
+${enrichmentBlock}
 SOURCES:
 ${sourceBlocks}${liveSearchNote}${continuationBlock}${freshBlock}
 
-Write the ${isFinal ? "final" : "draft"} report now. Markdown only — no preamble, no postamble.`;
+Write the ${isFinal ? "final" : "draft"} report now. Markdown only — no preamble, no postamble.${
+    enrichment.hasData
+      ? `\n\nIMPORTANT: The AUTHORITATIVE LIVE DATA block at the top contains current numbers from primary APIs (DefiLlama, CoinGecko). Lead with these numbers when they exist — they override any conflicting figures in the scraped sources below. Cite them as [DefiLlama] or [CoinGecko].`
+      : ""
+  }`;
 
   // Research synthesis uses NOELCLAW_RESEARCH_MODEL when set. Default is
   // `grok-4.3` — when Bankr is the active gateway this routes to Grok 4.3
