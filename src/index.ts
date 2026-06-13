@@ -117,7 +117,7 @@ async function main() {
     process.stderr.write(`\n`);
     line("wallet",  wallet.address);
     if (hasAuth) {
-      line("auth",   `${C.green}signed in${C.reset}  ${C.dim}all 102 tools unlocked${C.reset}`, C.green);
+      line("auth",   `${C.green}signed in${C.reset}  ${C.dim}all 110 tools unlocked${C.reset}`, C.green);
     } else {
       line("auth",   `${C.yellow}not signed in${C.reset}  ${C.dim}run 'noelclaw login' to unlock premium tools${C.reset}`, C.yellow);
     }
@@ -166,7 +166,7 @@ async function loginFlow() {
     writeConfig({ sessionToken: token, email: data.user?.email });
     process.stderr.write(`\n  ${C.green}âœ“ Signed in as ${data.user?.email ?? data.user?.username}${C.reset}\n`);
     process.stderr.write(`  ${C.dim}Token saved to ~/.noelclaw/config.json${C.reset}\n`);
-    process.stderr.write(`  ${C.dim}All 102 tools now unlocked.${C.reset}\n\n`);
+    process.stderr.write(`  ${C.dim}All 110 tools now unlocked.${C.reset}\n\n`);
   } catch (err: any) {
     if (authFailed) {
       process.stderr.write(`\n  ${C.yellow}âœ— ${err.message} â€” check your token at app.noelclaw.com${C.reset}\n\n`);

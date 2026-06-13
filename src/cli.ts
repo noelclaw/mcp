@@ -56,7 +56,7 @@ async function loginWithOtp(rl: readline.Interface): Promise<void> {
 
   writeConfig({ sessionToken: data.token, email });
   console.log(`  ${C.green}✓ Logged in as ${email}${C.reset}`);
-  console.log(`  ${C.dim}Token saved to ~/.noelclaw/config.json — all 102 tools unlocked.${C.reset}\n`);
+  console.log(`  ${C.dim}Token saved to ~/.noelclaw/config.json — all 110 tools unlocked.${C.reset}\n`);
 }
 
 async function loginWithApiKey(rl: readline.Interface): Promise<void> {
@@ -80,7 +80,7 @@ async function loginWithApiKey(rl: readline.Interface): Promise<void> {
 
   writeConfig({ sessionToken: data.token, email: data.email ?? "api-key-user" });
   console.log(`  ${C.green}✓ Authenticated${data.email ? ` as ${data.email}` : ""}${C.reset}`);
-  console.log(`  ${C.dim}Token saved to ~/.noelclaw/config.json — all 102 tools unlocked.${C.reset}\n`);
+  console.log(`  ${C.dim}Token saved to ~/.noelclaw/config.json — all 110 tools unlocked.${C.reset}\n`);
 }
 
 async function loginFlow(): Promise<void> {
@@ -124,7 +124,7 @@ ${C.cyan}${C.bold}  ██║╚██╗██║██║   ██║██╔
 ${C.cyan}${C.bold}  ██║ ╚████║╚██████╔╝███████╗███████╗╚██████╗███████╗██║  ██║╚███╔███╔╝${C.reset}
 ${C.cyan}${C.bold}  ╚═╝  ╚═══╝ ╚═════╝ ╚══════╝╚══════╝ ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝${C.reset}
 
-  ${C.dim}v${PKG_VERSION}  ·  102 tools  ·  persistent AI OS  ·  noelclaw.com${C.reset}
+  ${C.dim}v${PKG_VERSION}  ·  110 tools  ·  persistent AI OS  ·  noelclaw.com${C.reset}
   ${C.dim}────────────────────────────────────────────────────────────${C.reset}
   ${C.dim}Type anything. /help for commands. Ctrl+C to exit.${C.reset}
 `;
@@ -179,7 +179,7 @@ async function main() {
   if (cfg.email) {
     console.log(`  ${C.dim}Signed in as:${C.reset} ${C.green}${cfg.email}${C.reset} ${C.dim}· all tools unlocked${C.reset}\n`);
   } else {
-    console.log(`  ${C.dim}Not signed in. Run${C.reset} ${C.cyan}/login${C.reset} ${C.dim}to unlock all 102 tools.${C.reset}\n`);
+    console.log(`  ${C.dim}Not signed in. Run${C.reset} ${C.cyan}/login${C.reset} ${C.dim}to unlock all 110 tools.${C.reset}\n`);
   }
 
   const history: ChatMessage[] = [];

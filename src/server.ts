@@ -16,6 +16,7 @@ import { AGENT_TOOLS, handleAgentTool } from "./tools/agents.js";
 import { SCANNER_TOOLS, handleScannerTool } from "./tools/scanner.js";
 import { CODER_TOOLS, handleCoderTool } from "./tools/coder.js";
 import { BASE_TOOLS, handleBaseTool } from "./tools/base.js";
+import { BASE_MCP_TOOLS, handleBaseMcpTool } from "./tools/base-mcp.js";
 import { MEMORY_TOOLS, handleMemoryTool } from "./tools/memory.js";
 import { OS_TOOLS, handleOsTool } from "./tools/os.js";
 import { RESEARCH_TOOLS, handleResearchTool } from "./tools/research.js";
@@ -60,6 +61,7 @@ export const ALL_TOOLS = [
   ...SCANNER_TOOLS,      // 3 — score_token, check_token, scan_market (dips+momentum merged)
   ...CODER_TOOLS,        // 5 — generate_contract, audit_contract, explain_code, review_code, generate_mcp_skill
   ...BASE_TOOLS,         // 4 — query_vaults, list_markets, prepare_deposit, chain_stats
+  ...BASE_MCP_TOOLS,     // 8 — base_mcp_{status,balance,send,swap,estimate,lend,resolve,analyze}
   ...MEMORY_TOOLS,       // 10 — memory_add, memory_search, memory_context, memory_profile, memory_list, memory_delete, memory_insight, memory_extract, memory_consolidate, memory_publish
   ...OS_TOOLS,           // 1 — noel_status
   ...RESEARCH_TOOLS,       // 2 — web_scrape, web_search
@@ -70,7 +72,7 @@ export const ALL_TOOLS = [
   ...GITHUB_TOOLS,       // 8 — list_repos, list_prs, get_pr, list_issues, get_issue, get_file, get_commits, search_code
   ...CHRONICLE_TOOLS,    // 2 — chronicle_add, chronicle_list
   ...PACKET_TOOLS,       // 4 — packet_create, packet_run, packet_list, packet_share
-  // total: 102
+  // total: 110
 ];
 
 // Build O(1) dispatch map at startup — avoids sequential chained awaits per call
@@ -91,6 +93,7 @@ export const HANDLER_MAP = new Map<string, Handler>([
   ...SCANNER_TOOLS.map(t     => [t.name, handleScannerTool]     as [string, Handler]),
   ...CODER_TOOLS.map(t       => [t.name, handleCoderTool]       as [string, Handler]),
   ...BASE_TOOLS.map(t        => [t.name, handleBaseTool]        as [string, Handler]),
+  ...BASE_MCP_TOOLS.map(t    => [t.name, handleBaseMcpTool]    as [string, Handler]),
   ...MEMORY_TOOLS.map(t      => [t.name, handleMemoryTool]      as [string, Handler]),
   ...OS_TOOLS.map(t          => [t.name, handleOsTool]           as [string, Handler]),
   ...RESEARCH_TOOLS.map(t      => [t.name, handleResearchTool]   as [string, Handler]),
