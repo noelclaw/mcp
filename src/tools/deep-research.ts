@@ -4,7 +4,7 @@ import { ToolResult } from "../types.js";
 import { callLLM, isGrokActive, type LiveSearchOptions, type LiveSearchSource } from "../llm.js";
 import { callConvex } from "../convex.js";
 import { checkSignal } from "../signal-gate.js";
-import { enrichCryptoQuery } from "../crypto-enrichment.js";
+import { enrichQuery, todayContext } from "../enrichment-router.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -401,12 +401,12 @@ async function synthesize(
     })
     .join("\n\n---\n\n");
 
-  // Crypto enrichment — pull live primary-source data from DefiLlama +
-  // CoinGecko when the query is about a protocol/chain/token. The block
-  // gets prepended to source blocks and tagged as "AUTHORITATIVE LIVE DATA"
-  // so the LLM prefers these numbers over scraped web content (which often
-  // returns stale or secondary data).
-  const enrichment = isFinal ? await enrichCryptoQuery(query) : { context: "", hasData: false };
+  // Multi-domain enrichment — auto-detect topic (crypto/tech/academic/general)
+  // and pull live primary-source data in parallel. Crypto routes to DefiLlama
+  // + CoinGecko; tech to HackerNews + GitHub; academic to arXiv; general to
+  // Wikipedia. The combined block prepends to source blocks and is tagged
+  // AUTHORITATIVE LIVE DATA so the LLM treats those numbers as ground truth.
+  const enrichment = isFinal ? await enrichQuery(query) : { context: "", hasData: false, domains: [] as string[] };
 
   const liveSearchNote = liveSearch
     ? `\n\nIMPORTANT — Real-time augmentation:
@@ -461,6 +461,8 @@ This section is REQUIRED whenever the sources contain quantitative data. Skip ON
 Single paragraph synthesis covering the main findings from sources, with inline citations.`;
 
   const sys = `You are a senior analyst writing a structured research report from numbered web sources.
+
+${todayContext()}
 
 OUTPUT FORMAT (strict — exact Markdown sections, in this order):
 
