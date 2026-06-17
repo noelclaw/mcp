@@ -2,12 +2,21 @@ import { ALL_TOOLS, HANDLER_MAP } from "./server.js";
 import { callLLM, type ChatMessage } from "./llm.js";
 import { callConvex } from "./convex.js";
 
-const SYSTEM_PROMPT =
-  "You are Noelclaw, a persistent AI operating system with 110 tools spanning memory, vault, deep research, agents, code, automations, DeFi, and GitHub. " +
-  "Be direct and concise. Pick the right tool — don't narrate the choice. Summarize tool results in plain English. " +
-  "For deep research: prefer deep_research (multi-stage, saves to vault). Use continueFrom when extending prior reports. " +
-  "For live web info: use web_search. For market questions: use get_market_data or market_thesis. " +
-  "Save substantive findings to vault; do not save thin or empty outputs.";
+const SYSTEM_PROMPT = [
+  `You are Noelclaw, the runtime layer for Agentic AI - with ${ALL_TOOLS.length} tools spanning memory, vault, deep research, persistent agents, code, automations, DeFi, and GitHub.`,
+  "Be direct and concise. Pick the right tool - don't narrate the choice. Summarize tool results in plain English.",
+  "",
+  "CRITICAL - on-chain / financial actions (swap, send, transfer, buy, sell, bridge, lend, deposit, withdraw, balance):",
+  "- You MUST call the corresponding tool. NEVER write 'Sent', 'Swapped', 'Tx confirmed', or any execution claim without an actual tool call returning a result first.",
+  "- Tx hash and basescan/explorer URL from the tool output are MANDATORY in your reply - show them verbatim, do not omit or paraphrase.",
+  "- NEVER fabricate a post-transaction balance with arithmetic. If user wants the new balance, call the balance tool again - do not compute it from a prior balance + amount.",
+  "- For ALL Base chain operations, you MUST use the base_mcp_* family: base_mcp_swap (NOT swap_tokens), base_mcp_send (NOT send_token), base_mcp_balance (NOT get_portfolio), base_mcp_estimate, base_mcp_resolve, base_mcp_lend, base_mcp_status. This is non-negotiable - Base operations go through the Base MCP skill, period.",
+  "- Do NOT claim an address belongs to the user (e.g. 'your own address') unless you have verified ownership. Resolving a basename returns whoever owns that name - usually NOT the caller.",
+  "",
+  "For deep research: prefer deep_research (multi-stage, saves to vault). Use continueFrom when extending prior reports.",
+  "For live web info: use web_search. For market questions: use get_market_data or market_thesis.",
+  "Save substantive findings to vault; do not save thin or empty outputs.",
+].join("\n");
 
 export type AgentResult = {
   text: string;
@@ -25,12 +34,12 @@ export async function runAgent(
   if (bankrKey)     return runBankrLoop(bankrKey, userMessage, history, onToolCall);
   if (anthropicKey) return runAnthropicLoop(anthropicKey, userMessage, history, onToolCall);
 
-  // No direct key — proxy through Noelclaw backend. Wallet auto-creates at ~/.noelclaw/wallet.json
+  // No direct key - proxy through Noelclaw backend. Wallet auto-creates at ~/.noelclaw/wallet.json
   // on first use and signs requests transparently. No account or config needed.
   try {
     return await runConvexProxiedLoop(userMessage, history, onToolCall);
   } catch {
-    // Network down or backend unavailable — plain chat fallback
+    // Network down or backend unavailable - plain chat fallback
     const text = await callLLM(SYSTEM_PROMPT, userMessage, 1024, history);
     return { text, toolCalls: [] };
   }
@@ -116,7 +125,7 @@ async function runAnthropicLoop(
   return { text: "Reached max tool iterations.", toolCalls };
 }
 
-// ── Convex-proxied Anthropic loop (session token only — platform covers LLM) ──
+// ── Convex-proxied Anthropic loop (session token only - platform covers LLM) ──
 
 async function runConvexProxiedLoop(
   userMessage: string,

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
-import { callConvex } from "../convex.js";
+import { callConvex, callConvexRaw } from "../convex.js";
 import { ToolResult } from "../types.js";
 import { syncToSupermemory, searchSupermemory } from "./memory.js";
 
@@ -10,17 +10,16 @@ export const VAULT_TOOLS: Tool[] = [
   {
     name: "vault_save",
     description:
-      "Save or update an artifact in Noel-Vault — the persistent memory layer for agents. " +
-      "Use this to store research outputs, execution logs, workflows, versioned prompts, " +
-      "generated files, or long-term memory. Each save creates a new version automatically. " +
-      "Same key = update existing (git-style). Types: research | execution | workflow | prompt | file | memory. " +
-      "For a quick note or preference, use type='memory' with just content — title is optional.",
+      "Save or update a versioned artifact in Noel-Vault. Same key = update (git-style: prior version snapshotted, patched to v+1). " +
+      "Types: research | execution | workflow | prompt | file | memory. " +
+      "Entries up to 10MB - content over 600KB auto-offloads to blob storage. " +
+      "For quick unstructured notes, use memory_add instead.",
     inputSchema: {
       type: "object",
       properties: {
         type: { type: "string", enum: [...VAULT_TYPES], description: "Entry type" },
         title: { type: "string", description: "Human-readable title (auto-generated from content if omitted)" },
-        content: { type: "string", description: "Main content — markdown, JSON, code, or plain text" },
+        content: { type: "string", description: "Main content - markdown, JSON, code, or plain text" },
         key: { type: "string", description: "Optional slug key e.g. 'research/btc-dominance-analysis'. Auto-generated if omitted." },
         contentType: { type: "string", enum: ["markdown", "json", "text", "code"], description: "Content format hint" },
         agentId: { type: "string", description: "Agent ID writing this entry" },
@@ -62,13 +61,13 @@ export const VAULT_TOOLS: Tool[] = [
     name: "vault_search",
     description:
       "Search Noel-Vault using semantic AI search (powered by Supermemory) when available, " +
-      "with automatic fallback to full-text search. Semantic search understands meaning — " +
+      "with automatic fallback to full-text search. Semantic search understands meaning - " +
       "'low risk DeFi yield' matches 'conservative staking strategies' without exact keywords. " +
       "Optionally filter by type. Returns ranked results with previews.",
     inputSchema: {
       type: "object",
       properties: {
-        query: { type: "string", description: "Search query — natural language works best with semantic mode" },
+        query: { type: "string", description: "Search query - natural language works best with semantic mode" },
         type: { type: "string", enum: [...VAULT_TYPES], description: "Narrow search to a specific type" },
         limit: { type: "number", description: "Max results (default 20)" },
       },
@@ -78,7 +77,7 @@ export const VAULT_TOOLS: Tool[] = [
   {
     name: "vault_history",
     description:
-      "Get the full version history of a Noel-Vault entry — like git log. " +
+      "Get the full version history of a Noel-Vault entry - like git log. " +
       "Shows each version with its commit message, author agent, size, and timestamp.",
     inputSchema: {
       type: "object",
@@ -91,7 +90,7 @@ export const VAULT_TOOLS: Tool[] = [
   {
     name: "vault_diff",
     description:
-      "Compare two versions of a Noel-Vault entry — like git diff. " +
+      "Compare two versions of a Noel-Vault entry - like git diff. " +
       "Shows lines added (+) and removed (-) between fromVersion and toVersion.",
     inputSchema: {
       type: "object",
@@ -127,7 +126,7 @@ export const VAULT_TOOLS: Tool[] = [
       properties: {
         name: { type: "string", description: "Credential name, e.g. 'ALCHEMY_API_KEY', 'TELEGRAM_BOT_TOKEN'" },
         value: { type: "string", description: "The secret value to store" },
-        description: { type: "string", description: "Optional note about this credential — what it's for, expiry, etc." },
+        description: { type: "string", description: "Optional note about this credential - what it's for, expiry, etc." },
       },
       required: ["name", "value"],
     },
@@ -190,7 +189,7 @@ export const VAULT_TOOLS: Tool[] = [
   {
     name: "vault_link",
     description:
-      "Create a semantic relationship between two Noel-Vault entries — building a knowledge graph. " +
+      "Create a semantic relationship between two Noel-Vault entries - building a knowledge graph. " +
       "Relations: references | derived_from | supersedes | related | continues. " +
       "Example: link a synthesis entry as 'derived_from' several research entries, or mark a newer analysis as 'supersedes' an older one. " +
       "Duplicate links are updated in-place.",
@@ -211,7 +210,7 @@ export const VAULT_TOOLS: Tool[] = [
   {
     name: "vault_related",
     description:
-      "Traverse the Noel-Vault knowledge graph — get all entries linked to a given entry. " +
+      "Traverse the Noel-Vault knowledge graph - get all entries linked to a given entry. " +
       "Returns both outbound links (entries this entry references) and inbound links (entries that reference this one). " +
       "Filter by relation type to find only derived entries, superseded versions, continuations, etc.",
     inputSchema: {
@@ -270,7 +269,7 @@ const RelatedSchema = z.object({ key: z.string().min(1), relation: z.enum(VAULT_
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatBytes(n: number | undefined): string {
-  if (!n) return "—";
+  if (!n) return "-";
   if (n < 1024) return `${n}B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`;
   return `${(n / 1024 / 1024).toFixed(2)}MB`;
@@ -290,7 +289,7 @@ export async function handleVaultTool(name: string, args: unknown): Promise<Tool
 
       // Auto-generate title from content if not provided
       const firstLine = parsed.data.content.split("\n")[0].replace(/^#+\s*/, "").slice(0, 80);
-      const autoTitle = parsed.data.title ?? (firstLine || `${parsed.data.type} — ${new Date().toISOString().slice(0, 10)}`);
+      const autoTitle = parsed.data.title ?? (firstLine || `${parsed.data.type} - ${new Date().toISOString().slice(0, 10)}`);
       const savePayload = { ...parsed.data, title: autoTitle };
 
       const data = await callConvex("/vault/save", "POST", savePayload, "vault_save");
@@ -305,12 +304,30 @@ export async function handleVaultTool(name: string, args: unknown): Promise<Tool
         });
       }
 
+      // Surface inline-syntax results so the user sees [[wikilinks]] and
+      // #tags doing their work. Backend reports inlineLinksDetected,
+      // linksCreated, linksMissing[], inlineTagsExtracted.
+      const linkSummary: string[] = [];
+      if (typeof data.linksCreated === "number" && data.linksCreated > 0) {
+        linkSummary.push(`🔗 ${data.linksCreated} wikilink edge(s) created from \`[[...]]\``);
+      }
+      if (Array.isArray(data.linksMissing) && data.linksMissing.length > 0) {
+        linkSummary.push(`⚠️ Missing target(s): ${data.linksMissing.map((k: string) => `\`${k}\``).join(", ")} - save them later to backlink`);
+      }
+      if (typeof data.inlineTagsExtracted === "number" && data.inlineTagsExtracted > 0) {
+        linkSummary.push(`🏷️ ${data.inlineTagsExtracted} \`#tag\`(s) auto-extracted`);
+      }
+      if (data.blobStored) {
+        linkSummary.push(`📁 Large content (${Math.round((data.originalSize ?? 0) / 1024)}KB) stored as blob; chunked indexing in progress`);
+      }
+
       const lines = [
         `📦 **Vault ${changed ? (version === 1 ? "Created" : "Updated") : "Unchanged"}**`,
         `Key: \`${key}\``,
         `Version: v${version}`,
         changed && version > 1 ? `Previous version auto-snapshotted.` : "",
         `🧠 Synced to semantic memory`,
+        ...linkSummary,
         ``,
         `Use \`vault_read\` to retrieve, \`vault_history\` to see all versions.`,
       ].filter(Boolean);
@@ -320,21 +337,70 @@ export async function handleVaultTool(name: string, args: unknown): Promise<Tool
     case "vault_read": {
       const parsed = ReadSchema.safeParse(args);
       if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
-      const data = await callConvex(`/vault/entry?key=${encodeURIComponent(parsed.data.key)}`, "GET", undefined, "vault_read");
-      if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
+      const vaultReadKey = parsed.data.key;
+      let data: any;
+      try {
+        data = await callConvex(`/vault/entry?key=${encodeURIComponent(vaultReadKey)}`, "GET", undefined, "vault_read");
+      } catch (e: any) {
+        const msg = String(e?.message ?? e).toLowerCase();
+        const searchTerms = vaultReadKey.split("/").pop()?.replace(/-/g, " ") ?? vaultReadKey;
+        if (msg.includes("404") || msg.includes("not found")) {
+          return { content: [{ type: "text", text: [
+            `vault_read: entry \`${vaultReadKey}\` not found.`,
+            ``,
+            `Try searching for it:`,
+            `- \`vault_search query="${searchTerms}"\` — semantic search across all entries`,
+            `- \`vault_list\` — browse all entries`,
+            `- \`vault_search query="${vaultReadKey.split("/")[0]}"\` — search by type prefix`,
+          ].join("\n") }], isError: true };
+        }
+        if (msg.includes("401") || msg.includes("auth") || msg.includes("unauthorized")) {
+          return { content: [{ type: "text", text: `vault_read: not authenticated. Run \`noelclaw login\` to sign in.` }], isError: true };
+        }
+        return { content: [{ type: "text", text: `vault_read failed: ${e?.message ?? e}` }], isError: true };
+      }
+      if (data?.error) {
+        const err = String(data.error).toLowerCase();
+        if (err.includes("not found") || err.includes("404") || err.includes("no entry")) {
+          const searchTerms = vaultReadKey.split("/").pop()?.replace(/-/g, " ") ?? vaultReadKey;
+          return { content: [{ type: "text", text: [
+            `vault_read: entry \`${vaultReadKey}\` not found.`,
+            `Try: vault_search query="${searchTerms}"`,
+            `Or: vault_list`,
+          ].join("\n") }], isError: true };
+        }
+        return { content: [{ type: "text", text: `vault_read error: ${data.error}` }], isError: true };
+      }
+
+      // Large entries are offloaded to Convex File Storage. The doc holds a
+      // preview only; pull the real content from /vault/blob.
+      let fullContent: string = data.content ?? "";
+      if (data.contentFileId) {
+        try {
+          fullContent = await callConvexRaw(`/vault/blob?id=${encodeURIComponent(data.contentFileId)}`, "vault_read");
+        } catch (err: any) {
+          fullContent = (data.content ?? "") + `\n\n_(could not load full blob: ${err.message})_`;
+        }
+      }
+
+      const sizeLabel = data.originalSize ? formatBytes(data.originalSize) : formatBytes(data.size);
+      const backlinksBlock = Array.isArray(data.backlinks) && data.backlinks.length > 0
+        ? `\n🔙 Linked from (${data.backlinks.length}):\n${data.backlinks.map((b: any) => `  ← \`${b.key}\`${b.title ? ` - ${b.title}` : ""}`).join("\n")}`
+        : "";
 
       const lines = [
         `📂 **${data.title}**`,
-        `Key: \`${data.key}\`  ·  Type: ${data.type}  ·  v${data.version}  ·  ${formatBytes(data.size)}`,
+        `Key: \`${data.key}\`  ·  Type: ${data.type}  ·  v${data.version}  ·  ${sizeLabel}${data.contentFileId ? " · blob" : ""}`,
         data.tags?.length ? `Tags: ${data.tags.join(", ")}` : "",
         data.isPinned ? "📌 Pinned" : "",
         data.agentId ? `Agent: ${data.agentId}` : "",
         `Updated: ${formatDate(data.updatedAt)}`,
-        data.linkedKeys?.length ? `\nLinks:\n${data.linkedKeys.map((l: string) => `  → ${l}`).join("\n")}` : "",
+        data.linkedKeys?.length ? `\nLinks out:\n${data.linkedKeys.map((l: string) => `  → ${l}`).join("\n")}` : "",
+        backlinksBlock,
         ``,
         `---`,
         ``,
-        data.content,
+        fullContent,
       ].filter((l) => l !== "");
       return { content: [{ type: "text", text: lines.join("\n") }] };
     }
@@ -355,7 +421,7 @@ export async function handleVaultTool(name: string, args: unknown): Promise<Tool
 
       const header = `📚 **Noel-Vault** (${entries.length} entries)`;
       const rows = entries.map((e) =>
-        `${e.isPinned ? "📌 " : ""}[\`${e.key}\`] ${e.title} — v${e.version} · ${e.type} · ${formatBytes(e.size)} · ${formatDate(e.updatedAt)}`
+        `${e.isPinned ? "📌 " : ""}[\`${e.key}\`] ${e.title} - v${e.version} · ${e.type} · ${formatBytes(e.size)} · ${formatDate(e.updatedAt)}`
       );
       return { content: [{ type: "text", text: [header, "", ...rows].join("\n") }] };
     }
@@ -364,25 +430,72 @@ export async function handleVaultTool(name: string, args: unknown): Promise<Tool
       const parsed = SearchSchema.safeParse(args);
       if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
 
-      // Try semantic search first (proxied through Convex)
+      // Try semantic search first (proxied through Convex). Large vault
+      // entries are indexed as multiple chunks tagged with isVaultChunk +
+      // vaultKey - group chunks back to their parent entry so the result
+      // list shows one row per entry, not one row per chunk.
       {
-        const smResults = await searchSupermemory(parsed.data.query, parsed.data.limit ?? 20);
+        const limit = parsed.data.limit ?? 20;
+        // Over-fetch so that after chunk dedup we still have ~limit rows.
+        const smResults = await searchSupermemory(parsed.data.query, Math.min(50, limit * 3));
         if (smResults.length > 0) {
-          // Filter by type if requested
           const filtered = parsed.data.type
             ? smResults.filter(r => r.metadata?.type === parsed.data.type)
             : smResults;
+
           if (filtered.length > 0) {
-            const header = `🔍 **Vault Search** [Semantic]: "${parsed.data.query}" — ${filtered.length} result(s)`;
-            const rows = filtered.map((r, i) => {
-              const score = r.score != null ? ` ${(r.score * 100).toFixed(0)}%` : "";
+            // Group by vaultKey (chunks) or by id (standalone memories).
+            type Grouped = {
+              key: string;
+              title: string;
+              type: string;
+              bestScore: number;
+              bestPreview: string;
+              chunkHits: number;
+              isVaultChunk: boolean;
+            };
+            const groups = new Map<string, Grouped>();
+            for (const r of filtered) {
+              const isChunk = r.metadata?.isVaultChunk === true;
+              const groupKey: string = isChunk ? (r.metadata?.vaultKey ?? r.id) : r.id;
+              const existing = groups.get(groupKey);
+              const score = r.score ?? 0;
+              const preview = (r.content ?? "").slice(0, 200).replace(/\n/g, " ");
               const title = r.metadata?.title ?? r.content.slice(0, 60);
-              const type = r.metadata?.type ?? "memory";
-              const key = r.metadata?.vaultKey ?? r.id;
-              const preview = r.content.slice(0, 150).replace(/\n/g, " ");
+              const type = r.metadata?.type ?? (isChunk ? "vault" : "memory");
+
+              if (!existing) {
+                groups.set(groupKey, {
+                  key: groupKey,
+                  title,
+                  type,
+                  bestScore: score,
+                  bestPreview: preview,
+                  chunkHits: 1,
+                  isVaultChunk: isChunk,
+                });
+              } else {
+                existing.chunkHits += 1;
+                if (score > existing.bestScore) {
+                  existing.bestScore = score;
+                  existing.bestPreview = preview;
+                }
+              }
+            }
+
+            const grouped = Array.from(groups.values())
+              .sort((a, b) => b.bestScore - a.bestScore)
+              .slice(0, limit);
+
+            const header = `🔍 **Vault Search** [Semantic]: "${parsed.data.query}" - ${grouped.length} entry/entries`;
+            const rows = grouped.map((g, i) => {
+              const score = g.bestScore ? ` ${(g.bestScore * 100).toFixed(0)}%` : "";
+              const chunkBadge = g.isVaultChunk && g.chunkHits > 1
+                ? ` · ${g.chunkHits} chunk hits`
+                : "";
               return [
-                `${i + 1}.${score} [\`${key}\`] **${title}**  (${type})`,
-                `   ${preview}${r.content.length > 150 ? "…" : ""}`,
+                `${i + 1}.${score} [\`${g.key}\`] **${g.title}**  (${g.type}${chunkBadge})`,
+                `   ${g.bestPreview}${g.bestPreview.length >= 200 ? "…" : ""}`,
               ].join("\n");
             });
             return { content: [{ type: "text", text: [header, "", ...rows].join("\n") }] };
@@ -400,7 +513,7 @@ export async function handleVaultTool(name: string, args: unknown): Promise<Tool
       const results: any[] = data.results ?? [];
       if (!results.length) return { content: [{ type: "text", text: `No vault entries found for: "${parsed.data.query}"` }] };
 
-      const header = `🔍 **Vault Search**: "${parsed.data.query}" — ${results.length} result(s)`;
+      const header = `🔍 **Vault Search**: "${parsed.data.query}" - ${results.length} result(s)`;
       const rows = results.map((r, i) => [
         `${i + 1}. [\`${r.key}\`] **${r.title}**  (${r.type} · v${r.version})`,
         `   ${r.preview}`,
@@ -411,8 +524,28 @@ export async function handleVaultTool(name: string, args: unknown): Promise<Tool
     case "vault_history": {
       const parsed = HistorySchema.safeParse(args);
       if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
-      const data = await callConvex(`/vault/history?key=${encodeURIComponent(parsed.data.key)}`, "GET", undefined, "vault_history");
-      if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
+      const histKey = parsed.data.key;
+      let data: any;
+      try {
+        data = await callConvex(`/vault/history?key=${encodeURIComponent(histKey)}`, "GET", undefined, "vault_history");
+      } catch (e: any) {
+        const msg = String(e?.message ?? e).toLowerCase();
+        const searchTerms = histKey.split("/").pop()?.replace(/-/g, " ") ?? histKey;
+        if (msg.includes("404") || msg.includes("not found")) {
+          return { content: [{ type: "text", text: [
+            `vault_history: entry \`${histKey}\` not found.`,
+            `Try: vault_search query="${searchTerms}"`,
+            `Or: vault_list`,
+          ].join("\n") }], isError: true };
+        }
+        if (msg.includes("401") || msg.includes("unauthorized")) {
+          return { content: [{ type: "text", text: `vault_history: not authenticated. Run \`noelclaw login\`.` }], isError: true };
+        }
+        return { content: [{ type: "text", text: `vault_history failed: ${e?.message ?? e}` }], isError: true };
+      }
+      if (data?.error) {
+        return { content: [{ type: "text", text: `vault_history failed: ${data.error}` }], isError: true };
+      }
 
       const { key, title, currentVersion, history } = data;
       const header = [
@@ -423,7 +556,7 @@ export async function handleVaultTool(name: string, args: unknown): Promise<Tool
         `|---------|--------|-------|------|------|`,
       ];
       const rows = (history as any[]).map((v) =>
-        `| v${v.version} | ${v.commitMsg ?? "—"} | ${v.agentId ?? "—"} | ${formatBytes(v.size)} | ${formatDate(v.createdAt)} |`
+        `| v${v.version} | ${v.commitMsg ?? "-"} | ${v.agentId ?? "-"} | ${formatBytes(v.size)} | ${formatDate(v.createdAt)} |`
       );
       return { content: [{ type: "text", text: [...header, ...rows].join("\n") }] };
     }
@@ -432,14 +565,39 @@ export async function handleVaultTool(name: string, args: unknown): Promise<Tool
       const parsed = DiffSchema.safeParse(args);
       if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
       const { key, fromVersion, toVersion } = parsed.data;
-      const data = await callConvex(
-        `/vault/diff?key=${encodeURIComponent(key)}&from=${fromVersion}&to=${toVersion}`,
-        "GET", undefined, "vault_diff"
-      );
-      if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
+      let data: any;
+      try {
+        data = await callConvex(
+          `/vault/diff?key=${encodeURIComponent(key)}&from=${fromVersion}&to=${toVersion}`,
+          "GET", undefined, "vault_diff"
+        );
+      } catch (e: any) {
+        const msg = String(e?.message ?? e).toLowerCase();
+        const searchTerms = key.split("/").pop()?.replace(/-/g, " ") ?? key;
+        if (msg.includes("404") || msg.includes("not found")) {
+          return { content: [{ type: "text", text: [
+            `vault_diff: entry \`${key}\` not found.`,
+            `Try: vault_search query="${searchTerms}"`,
+            `Or: vault_history key="${key}" to see available versions`,
+          ].join("\n") }], isError: true };
+        }
+        if (msg.includes("version") || msg.includes("range")) {
+          return { content: [{ type: "text", text: [
+            `vault_diff: version range v${fromVersion}→v${toVersion} invalid for \`${key}\`.`,
+            `Check available versions: vault_history key="${key}"`,
+          ].join("\n") }], isError: true };
+        }
+        if (msg.includes("401") || msg.includes("unauthorized")) {
+          return { content: [{ type: "text", text: `vault_diff: not authenticated. Run \`noelclaw login\`.` }], isError: true };
+        }
+        return { content: [{ type: "text", text: `vault_diff failed: ${e?.message ?? e}` }], isError: true };
+      }
+      if (data?.error) {
+        return { content: [{ type: "text", text: `vault_diff failed: ${data.error}` }], isError: true };
+      }
 
       const lines = [
-        `📝 **Diff**: \`${data.key}\` — v${fromVersion} → v${toVersion}`,
+        `📝 **Diff**: \`${data.key}\` - v${fromVersion} → v${toVersion}`,
         ``,
         "```diff",
         data.diff,
@@ -520,7 +678,7 @@ export async function handleVaultTool(name: string, args: unknown): Promise<Tool
       const data = await callConvex("/vault/link", "POST", { fromKey, toKey, relation }, "vault_link");
       if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
       const action = data.updated ? "Updated link" : "Linked";
-      return { content: [{ type: "text", text: `🔗 ${action}: \`${fromKey}\` —[${relation}]→ \`${toKey}\`` }] };
+      return { content: [{ type: "text", text: `🔗 ${action}: \`${fromKey}\` -[${relation}]→ \`${toKey}\`` }] };
     }
 
     case "vault_related": {
@@ -535,7 +693,7 @@ export async function handleVaultTool(name: string, args: unknown): Promise<Tool
       if (data.error) return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
       const items = data.related ?? [];
       if (!items.length) return { content: [{ type: "text", text: `No related entries found for \`${key}\`${relation ? ` (relation: ${relation})` : ""}.` }] };
-      const lines = items.map(r => `- **${r.title}** (\`${r.key}\`) [${r.type}] — ${r.direction} \`${r.relation}\``);
+      const lines = items.map(r => `- **${r.title}** (\`${r.key}\`) [${r.type}] - ${r.direction} \`${r.relation}\``);
       return { content: [{ type: "text", text: `## Related entries for \`${key}\` (${items.length})\n\n${lines.join("\n")}` }] };
     }
 

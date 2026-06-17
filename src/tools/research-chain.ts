@@ -10,18 +10,7 @@ export const RESEARCH_CHAIN_TOOLS: Tool[] = [
   {
     name: "research_chain",
     description:
-      "Walk the temporal chain of a research topic and visualize how your " +
-      "understanding evolved across time. Follows the `continues` relations " +
-      "in your vault (built up by deep_research's continueFrom parameter) " +
-      "both backward (older) and forward (newer) from a starting report. " +
-      "Returns a chronological timeline with each report's date, title, and " +
-      "TL;DR, plus an LLM-synthesized 'net evolution' summary that calls out " +
-      "what changed at each step. " +
-      "Use cases: review how your competitor analysis evolved over a quarter; " +
-      "spot the moment your thesis on a market shifted; demonstrate research " +
-      "compounding to a teammate. " +
-      "This is what makes Noelclaw research different — the knowledge isn't " +
-      "disposable, it's a timeline you can walk through.",
+      "Walk a research topic's timeline. Follows `continues` relations both backward and forward from a starting report, then returns a chronological list with each report's date/title/TL;DR plus an LLM-synthesized 'net evolution' summary calling out what changed at each step.",
     inputSchema: {
       type: "object",
       properties: {
@@ -160,7 +149,7 @@ async function synthesizeNetEvolution(chain: ChainEntry[]): Promise<string> {
     return `[${i + 1}] (${date}) ${e.title}\nTL;DR: ${e.tldr.slice(0, 200)}`;
   }).join("\n\n");
 
-  const sys = "You are a research analyst summarizing the evolution of a thesis across multiple research reports. Be concise, specific, and emphasize what CHANGED — not what stayed the same.";
+  const sys = "You are a research analyst summarizing the evolution of a thesis across multiple research reports. Be concise, specific, and emphasize what CHANGED - not what stayed the same.";
 
   const user = `Below is a chronological chain of research reports on the same topic. Write a 4-6 sentence summary of how the user's understanding has evolved.
 
@@ -211,7 +200,7 @@ export async function handleResearchChain(name: string, args: unknown): Promise<
     return {
       content: [{
         type: "text",
-        text: `Could not load \`${startKey}\` — check the vault key (use vault_list type:research) and make sure you're authenticated.`,
+        text: `Could not load \`${startKey}\` - check the vault key (use vault_list type:research) and make sure you're authenticated.`,
       }],
       isError: true,
     };
@@ -222,9 +211,9 @@ export async function handleResearchChain(name: string, args: unknown): Promise<
       content: [{
         type: "text",
         text:
-          `🧬 **Research Chain** — \`${startKey}\` is a standalone report.\n\n` +
+          `🧬 **Research Chain** - \`${startKey}\` is a standalone report.\n\n` +
           `No \`continues\` links found in either direction. To start building a chain, ` +
-          `run \`deep_research\` again on the same topic with \`continueFrom="${startKey}"\` — ` +
+          `run \`deep_research\` again on the same topic with \`continueFrom="${startKey}"\` - ` +
           `that creates the temporal link.\n\n` +
           `Once you have 2+ continuations, this tool will walk and synthesize the evolution.`,
       }],
@@ -237,7 +226,7 @@ export async function handleResearchChain(name: string, args: unknown): Promise<
   const timelineLines: string[] = [];
   for (let i = 0; i < chain.length; i++) {
     const e = chain[i];
-    const date = e.updatedAt ? new Date(e.updatedAt).toISOString().slice(0, 10) : "—";
+    const date = e.updatedAt ? new Date(e.updatedAt).toISOString().slice(0, 10) : "-";
     const marker = e.key === startKey ? " ← you are here" : "";
     timelineLines.push(`### [${i + 1}/${chain.length}] ${date}${marker}`);
     timelineLines.push(`**${e.title}**`);
@@ -259,7 +248,7 @@ export async function handleResearchChain(name: string, args: unknown): Promise<
   }
 
   const header = [
-    `🧬 **Research Chain** — ${chain.length} reports across the timeline`,
+    `🧬 **Research Chain** - ${chain.length} reports across the timeline`,
     `📍 You are at: \`${startKey}\``,
     chain[0].updatedAt && chain[chain.length - 1].updatedAt
       ? `🗓 Spans ${new Date(chain[0].updatedAt!).toISOString().slice(0, 10)} → ${new Date(chain[chain.length - 1].updatedAt!).toISOString().slice(0, 10)}`

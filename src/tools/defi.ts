@@ -6,69 +6,9 @@ import { ToolResult } from "../types.js";
 
 export const DEFI_TOOLS: Tool[] = [
   {
-    name: "get_portfolio",
-    description: "Get current token balances and total portfolio value for your MCP wallet on Base. Always call this before swapping to confirm available balance.",
-    inputSchema: { type: "object", properties: {}, required: [] },
-  },
-  {
-    name: "estimate_swap",
-    description: "Preview a swap — get the expected output amount and price impact without executing. Use this before swap_tokens to confirm the rate is acceptable.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        fromToken: { type: "string", description: "Token to sell: ETH, USDC, USDT, DAI, WETH" },
-        toToken: { type: "string", description: "Token to buy: ETH, USDC, USDT, DAI, WETH" },
-        amount: { type: "string", description: "Amount to swap (e.g. '0.01', '50', '100%')" },
-      },
-      required: ["fromToken", "toToken", "amount"],
-    },
-  },
-  {
-    name: "swap_tokens",
-    description: "Swap tokens on Base mainnet via 0x Permit2. Supported: ETH, USDC, USDT, DAI, WETH. Amount is human-readable. Signed and broadcast locally from your wallet.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        fromToken: { type: "string", description: "Token to sell: ETH, USDC, USDT, DAI, WETH" },
-        toToken: { type: "string", description: "Token to buy: ETH, USDC, USDT, DAI, WETH" },
-        amount: { type: "string", description: "Amount to swap. Human-readable (e.g. '0.001') or percentage of balance (e.g. '50%', '100%')" },
-      },
-      required: ["fromToken", "toToken", "amount"],
-    },
-  },
-  {
-    name: "send_token",
-    description: "Send ETH or ERC-20 tokens (USDC, USDT, DAI, WETH) to any address on Base mainnet. Signed and broadcast locally from your wallet.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        token: { type: "string", description: "Token to send: ETH, USDC, USDT, DAI, WETH" },
-        toAddress: { type: "string", description: "Destination address (0x...)" },
-        amount: { type: "string", description: "Human-readable amount" },
-      },
-      required: ["token", "toAddress", "amount"],
-    },
-  },
-  {
-    name: "analyze_wallet",
-    description:
-      "AI-powered analysis of any public wallet on Base — not just your own. " +
-      "Enter any 0x address: see token holdings, portfolio value, concentration risk, " +
-      "DeFi positions, and a behavioral profile (whale, degen, LP provider, etc.). " +
-      "Use to track smart money, research whales, or audit any wallet before copying trades.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        address: { type: "string", description: "Wallet address to analyze (0x...)" },
-        label: { type: "string", description: "Optional label for this wallet (e.g. 'whale from Twitter')" },
-      },
-      required: ["address"],
-    },
-  },
-  {
     name: "get_defi_yields",
     description:
-      "Fetch top DeFi yield opportunities on Base — Morpho, Moonwell, Aerodrome, Uniswap, and more. " +
+      "Fetch top DeFi yield opportunities on Base - Morpho, Moonwell, Aerodrome, Uniswap, and more. " +
       "Returns live APY, TVL, and pool info from DeFiLlama (no API key required). " +
       "Filter by token or minimum APY. Use before depositing to find the best rates.",
     inputSchema: {
@@ -83,7 +23,16 @@ export const DEFI_TOOLS: Tool[] = [
   },
 ];
 
-const SwapSchema = z.object({ fromToken: z.string().min(1), toToken: z.string().min(1), amount: z.string().min(1) });
+const SwapSchema = z.object({
+  fromToken: z.string().min(1),
+  toToken: z.string().min(1),
+  amount: z.string().min(1),
+  maxSlippagePct: z.number().positive().max(50).optional(),
+  maxPriceImpactPct: z.number().positive().max(50).optional(),
+});
+
+const DEFAULT_MAX_SLIPPAGE_PCT = 1.0;
+const DEFAULT_MAX_PRICE_IMPACT_PCT = 3.0;
 const SendSchema = z.object({ token: z.string().min(1), toAddress: z.string().regex(/^0x[0-9a-fA-F]{40}$/, "must be a valid 0x address"), amount: z.string().min(1) });
 const AnalyzeWalletSchema = z.object({ address: z.string().regex(/^0x[0-9a-fA-F]{40}$/, "must be a valid 0x address"), label: z.string().optional() });
 const DefiYieldsSchema = z.object({
@@ -106,13 +55,13 @@ export async function handleDefiTool(name: string, args: unknown): Promise<ToolR
       if (result.error) return { content: [{ type: "text", text: `Portfolio fetch failed: ${result.error}` }], isError: true };
 
       const balances: any[] = result.balances ?? [];
-      const totalUsd: number = result.totalUsd ?? balances.reduce((s: number, b: any) => s + (b.valueUsd ?? 0), 0);
+      const totalUsd: number = result.totalUsd ?? result.totalValueUsd ?? balances.reduce((s: number, b: any) => s + (b.valueUsd ?? 0), 0);
 
       if (!balances.length) {
         return { content: [{ type: "text", text: "Your wallet has no tokens yet. Send ETH or USDC on Base to get started." }] };
       }
 
-      const lines = [`**Portfolio** — Total: $${totalUsd.toFixed(2)}`, ""];
+      const lines = [`**Portfolio** - Total: $${totalUsd.toFixed(2)}`, ""];
       for (const b of balances) {
         const value = b.valueUsd != null ? ` ($${Number(b.valueUsd).toFixed(2)})` : "";
         lines.push(`• **${b.token ?? b.symbol}**: ${Number(b.balance ?? b.amount).toLocaleString(undefined, { maximumFractionDigits: 6 })}${value}`);
@@ -124,14 +73,23 @@ export async function handleDefiTool(name: string, args: unknown): Promise<ToolR
     case "estimate_swap": {
       const parsed = SwapSchema.safeParse(args);
       if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${String(parsed.error.issues[0].path[0])} ${parsed.error.issues[0].message}` }], isError: true };
-      const { fromToken, toToken, amount } = parsed.data;
-      const result = await callConvex("/mcp/defi/swap", "POST", { fromToken, toToken, amount }, "estimate_swap");
+      const { fromToken, toToken, amount, maxSlippagePct, maxPriceImpactPct } = parsed.data;
+      const slippageLimit = maxSlippagePct ?? DEFAULT_MAX_SLIPPAGE_PCT;
+      const impactLimit = maxPriceImpactPct ?? DEFAULT_MAX_PRICE_IMPACT_PCT;
+      // Pass the MCP local wallet as the swap taker so 0x routes output back
+      // to the wallet that's signing - not the backend's custodial wallet.
+      const localWallet = await getOrCreateWallet();
+      const result = await callConvex("/mcp/defi/swap", "POST", { fromToken, toToken, amount, taker: localWallet.address, slippagePercentage: slippageLimit / 100 }, "estimate_swap");
       if (!result.success) return { content: [{ type: "text", text: `Estimate failed: ${result.error}` }], isError: true };
 
       const q = result.quote;
       const buyHuman = formatTokenAmount(q.buyAmount, q.buyToken ?? toToken);
       const sellHuman = formatTokenAmount(q.sellAmount ?? "0", q.sellToken ?? fromToken);
-      const priceImpact = q.estimatedPriceImpact != null ? `${Number(q.estimatedPriceImpact).toFixed(3)}%` : "< 0.01%";
+      const impactPct = q.estimatedPriceImpact != null ? Number(q.estimatedPriceImpact) : 0;
+      const priceImpact = q.estimatedPriceImpact != null ? `${impactPct.toFixed(3)}%` : "< 0.01%";
+      const impactWarning = impactPct > impactLimit
+        ? `\n⚠️ **Price impact ${impactPct.toFixed(2)}% exceeds limit ${impactLimit}%** - \`swap_tokens\` will refuse execution. Increase \`maxPriceImpactPct\` to override.`
+        : "";
 
       return {
         content: [{
@@ -142,6 +100,8 @@ export async function handleDefiTool(name: string, args: unknown): Promise<ToolR
             `You sell: **${sellHuman} ${(q.sellToken ?? fromToken).toUpperCase()}**`,
             `You get:  **~${buyHuman} ${(q.buyToken ?? toToken).toUpperCase()}**`,
             `Price impact: ${priceImpact}`,
+            `Slippage cap: ${slippageLimit}% · Price-impact cap: ${impactLimit}%`,
+            impactWarning,
             ``,
             `Run \`swap_tokens\` with the same params to execute.`,
           ].join("\n"),
@@ -152,16 +112,45 @@ export async function handleDefiTool(name: string, args: unknown): Promise<ToolR
     case "swap_tokens": {
       const parsed = SwapSchema.safeParse(args);
       if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${String(parsed.error.issues[0].path[0])} ${parsed.error.issues[0].message}` }], isError: true };
-      const { fromToken, toToken, amount } = parsed.data;
+      const { fromToken, toToken, amount, maxSlippagePct, maxPriceImpactPct } = parsed.data;
+      const slippageLimit = maxSlippagePct ?? DEFAULT_MAX_SLIPPAGE_PCT;
+      const impactLimit = maxPriceImpactPct ?? DEFAULT_MAX_PRICE_IMPACT_PCT;
       const wallet = await getOrCreateWallet();
-      const result = await callConvex("/mcp/defi/swap", "POST", { fromToken, toToken, amount }, "swap_tokens");
+      const result = await callConvex("/mcp/defi/swap", "POST", { fromToken, toToken, amount, taker: wallet.address, slippagePercentage: slippageLimit / 100 }, "swap_tokens");
       if (!result.success) return { content: [{ type: "text", text: `Swap failed: ${result.error}` }], isError: true };
-      const txHash = await signAndBroadcast(wallet, result.quote);
-      const buyAmountHuman = formatTokenAmount(result.quote.buyAmount, result.quote.buyToken ?? toToken);
+
+      const q = result.quote;
+      const impactPct = q.estimatedPriceImpact != null ? Number(q.estimatedPriceImpact) : 0;
+      if (impactPct > impactLimit) {
+        return {
+          content: [{
+            type: "text",
+            text: [
+              `🛑 **Swap refused - price impact too high.**`,
+              ``,
+              `Quoted price impact: **${impactPct.toFixed(3)}%**`,
+              `Configured cap:      **${impactLimit}%**`,
+              ``,
+              `Override by passing \`maxPriceImpactPct: ${Math.ceil(impactPct) + 1}\` if you understand the risk,`,
+              `or reduce \`amount\` to lower the impact.`,
+            ].join("\n"),
+          }],
+          isError: true,
+        };
+      }
+
+      const txHash = await signAndBroadcast(wallet, q);
+      const buyAmountHuman = formatTokenAmount(q.buyAmount, q.buyToken ?? toToken);
       return {
         content: [{
           type: "text",
-          text: [`✅ Swap executed!`, `${amount} ${fromToken.toUpperCase()} → ${buyAmountHuman} ${result.quote.buyToken}`, `Tx Hash: \`${txHash}\``, `https://basescan.org/tx/${txHash}`].join("\n"),
+          text: [
+            `✅ Swap executed!`,
+            `${amount} ${fromToken.toUpperCase()} → ${buyAmountHuman} ${q.buyToken}`,
+            `Slippage cap: ${slippageLimit}% · Price impact: ${impactPct.toFixed(3)}%`,
+            `Tx Hash: \`${txHash}\``,
+            `https://basescan.org/tx/${txHash}`,
+          ].join("\n"),
         }],
       };
     }
@@ -201,7 +190,7 @@ export async function handleDefiTool(name: string, args: unknown): Promise<ToolR
       if (data.error) return { content: [{ type: "text", text: `Wallet analysis failed: ${data.error}` }], isError: true };
 
       const total = (data.totalUsd ?? 0).toFixed(2);
-      const walletLabel = label ? ` — ${label}` : "";
+      const walletLabel = label ? ` - ${label}` : "";
       const topHoldings = (data.holdings ?? [])
         .slice(0, 8)
         .map(h => `• **${h.token}**: $${(h.valueUsd ?? 0).toFixed(2)}${h.pct != null ? ` (${h.pct}%)` : ""}`)
@@ -279,7 +268,7 @@ export async function handleDefiTool(name: string, args: unknown): Promise<ToolR
         : `$${n.toFixed(0)}`;
 
       const lines = [
-        `## DeFi Yields on Base${token ? ` — ${token.toUpperCase()}` : ""}`,
+        `## DeFi Yields on Base${token ? ` - ${token.toUpperCase()}` : ""}`,
         `Top ${filtered.length} pools · APY ≥ ${minApy}% · Source: DeFiLlama`,
         ``,
         `| # | Pool | Protocol | APY | TVL |`,
@@ -289,8 +278,8 @@ export async function handleDefiTool(name: string, args: unknown): Promise<ToolR
       filtered.forEach((p: any, i: number) => {
         const apy  = (p.apy ?? 0).toFixed(1);
         const tvl  = fmt(p.tvlUsd ?? 0);
-        const name = (p.symbol ?? p.pool ?? "—").replace(/-/g, " ");
-        const proj = p.project ?? "—";
+        const name = (p.symbol ?? p.pool ?? "-").replace(/-/g, " ");
+        const proj = p.project ?? "-";
         lines.push(`| ${i + 1} | ${name} | ${proj} | **${apy}%** | ${tvl} |`);
       });
 

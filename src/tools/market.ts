@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { ToolResult } from "../types.js";
+import { cachedFetch } from "../_http-cache.js";
 
 const COINGECKO = "https://api.coingecko.com/api/v3";
 
@@ -15,18 +16,18 @@ const SYMBOL_TO_ID: Record<string, string> = {
 };
 
 async function cgFetch(path: string): Promise<any> {
-  const res = await fetch(`${COINGECKO}${path}`, {
+  // CoinGecko free tier: 30 req/min. Cache + 429-backoff lives in cachedFetch.
+  const res = await cachedFetch(`${COINGECKO}${path}`, {
     headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
-  return res.json();
+  return JSON.parse(res.text);
 }
 
 async function resolveTokenId(query: string): Promise<{ id: string; symbol: string } | null> {
   const upper = query.trim().toUpperCase();
   if (SYMBOL_TO_ID[upper]) return { id: SYMBOL_TO_ID[upper], symbol: upper };
-  // Fallback: search CoinGecko — handles any token not in the static map
+  // Fallback: search CoinGecko - handles any token not in the static map
   try {
     const res = await cgFetch(`/search?query=${encodeURIComponent(query)}`);
     const coin = res.coins?.[0];
@@ -36,18 +37,18 @@ async function resolveTokenId(query: string): Promise<{ id: string; symbol: stri
 }
 
 function fmt(n: number | null | undefined, decimals = 2): string {
-  if (n == null) return "—";
+  if (n == null) return "-";
   return n.toLocaleString("en-US", { maximumFractionDigits: decimals });
 }
 
 function fmtPrice(n: number | null | undefined): string {
-  if (n == null) return "—";
+  if (n == null) return "-";
   if (n >= 1) return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   return `$${n.toPrecision(4)}`;
 }
 
 function fmtB(n: number | null | undefined): string {
-  if (n == null) return "—";
+  if (n == null) return "-";
   if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
   if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
   return `$${fmt(n)}`;
@@ -75,7 +76,7 @@ export const MARKET_TOOLS: Tool[] = [
   {
     name: "compare_tokens",
     description:
-      "Compare 2–5 tokens side by side — price, 24h/7d change, market cap, volume, and ATH drawdown. " +
+      "Compare 2–5 tokens side by side - price, 24h/7d change, market cap, volume, and ATH drawdown. " +
       "Ideal for deciding between assets or tracking a portfolio watchlist.",
     inputSchema: {
       type: "object",
@@ -168,9 +169,9 @@ export async function handleMarketTool(name: string, args: unknown): Promise<Too
         if (!c) return { content: [{ type: "text", text: `No data for ${sym}` }], isError: true };
         const sign = (c.price_change_percentage_24h ?? 0) >= 0 ? "+" : "";
         const lines = [
-          `**${c.symbol?.toUpperCase()} — ${c.name}**`,
+          `**${c.symbol?.toUpperCase()} - ${c.name}**`,
           `Price: ${fmtPrice(c.current_price)} (${sign}${fmt(c.price_change_percentage_24h)}% 24h)`,
-          `Market Cap: ${fmtB(c.market_cap)} (rank #${c.market_cap_rank ?? "—"})`,
+          `Market Cap: ${fmtB(c.market_cap)} (rank #${c.market_cap_rank ?? "-"})`,
           `Volume 24h: ${fmtB(c.total_volume)}`,
           `High/Low 24h: ${fmtPrice(c.high_24h)} / ${fmtPrice(c.low_24h)}`,
           "",
@@ -184,21 +185,21 @@ export async function handleMarketTool(name: string, args: unknown): Promise<Too
         cgFetch("/search/trending"),
       ]);
 
-      const lines: string[] = [`**Crypto Market Overview** — ${new Date().toUTCString()}`, ""];
+      const lines: string[] = [`**Crypto Market Overview** - ${new Date().toUTCString()}`, ""];
 
       lines.push("**Key Prices**");
       for (const sym of ["BTC", "ETH", "SOL"]) {
         const c = top20.find((x: any) => x.symbol?.toUpperCase() === sym);
         if (!c) continue;
         const sign = (c.price_change_percentage_24h ?? 0) >= 0 ? "+" : "";
-        lines.push(`• **${sym}**: ${fmtPrice(c.current_price)} (${sign}${fmt(c.price_change_percentage_24h)}% 24h) — mcap ${fmtB(c.market_cap)}`);
+        lines.push(`• **${sym}**: ${fmtPrice(c.current_price)} (${sign}${fmt(c.price_change_percentage_24h)}% 24h) - mcap ${fmtB(c.market_cap)}`);
       }
 
       lines.push("", "**Top 20 by Market Cap**");
       for (const c of top20) {
         const sym = c.symbol?.toUpperCase();
         const sign = (c.price_change_percentage_24h ?? 0) >= 0 ? "+" : "";
-        lines.push(`${c.market_cap_rank}. **${sym}** ${fmtPrice(c.current_price)} (${sign}${fmt(c.price_change_percentage_24h)}%) — ${fmtB(c.market_cap)}`);
+        lines.push(`${c.market_cap_rank}. **${sym}** ${fmtPrice(c.current_price)} (${sign}${fmt(c.price_change_percentage_24h)}%) - ${fmtB(c.market_cap)}`);
       }
 
       const trendingCoins: any[] = trending?.coins?.slice(0, 7) ?? [];
@@ -206,7 +207,7 @@ export async function handleMarketTool(name: string, args: unknown): Promise<Too
         lines.push("", "**Trending**");
         for (const t of trendingCoins) {
           const item = t.item;
-          lines.push(`• **${item.symbol}** (#${item.market_cap_rank ?? "—"}) — ${item.name}`);
+          lines.push(`• **${item.symbol}** (#${item.market_cap_rank ?? "-"}) - ${item.name}`);
         }
       }
 
@@ -232,12 +233,12 @@ export async function handleMarketTool(name: string, args: unknown): Promise<Too
 
       const sign = (c.price_change_percentage_24h ?? 0) >= 0 ? "+" : "";
       const lines = [
-        `**${c.symbol?.toUpperCase()} — ${c.name}**`,
+        `**${c.symbol?.toUpperCase()} - ${c.name}**`,
         `Price: ${fmtPrice(c.current_price)} (${sign}${fmt(c.price_change_percentage_24h)}% 24h)`,
-        `Market Cap: ${fmtB(c.market_cap)} (rank #${c.market_cap_rank ?? "—"})`,
+        `Market Cap: ${fmtB(c.market_cap)} (rank #${c.market_cap_rank ?? "-"})`,
         `Volume 24h: ${fmtB(c.total_volume)}`,
         `High/Low 24h: ${fmtPrice(c.high_24h)} / ${fmtPrice(c.low_24h)}`,
-        `All-Time High: ${fmtPrice(c.ath)} (${c.ath_change_percentage != null ? fmt(c.ath_change_percentage) + "% from ATH" : "—"})`,
+        `All-Time High: ${fmtPrice(c.ath)} (${c.ath_change_percentage != null ? fmt(c.ath_change_percentage) + "% from ATH" : "-"})`,
         "",
         `_Source: CoinGecko · ${new Date().toUTCString()}_`,
       ];
@@ -258,7 +259,7 @@ export async function handleMarketTool(name: string, args: unknown): Promise<Too
       );
 
       const header = [
-        `**Token Comparison** — ${new Date().toUTCString()}`,
+        `**Token Comparison** - ${new Date().toUTCString()}`,
         unknown.length ? `\n⚠️ Unknown: ${unknown.join(", ")}` : "",
         ``,
         `| Token | Price | 24h | 7d | Mcap | Vol 24h | ATH% |`,
@@ -280,7 +281,8 @@ export async function handleMarketTool(name: string, args: unknown): Promise<Too
     case "market_overview": {
       const [globalData, fearGreed, trending] = await Promise.allSettled([
         cgFetch("/global"),
-        fetch("https://api.alternative.me/fng/", { signal: AbortSignal.timeout(8000) }).then(r => r.json() as Promise<any>),
+        cachedFetch("https://api.alternative.me/fng/", { headers: { Accept: "application/json" } }, { timeoutMs: 8000 })
+          .then((r) => { if (!r.ok) throw new Error(`fng ${r.status}`); return JSON.parse(r.text) as any; }),
         cgFetch("/search/trending"),
       ]);
 
@@ -294,14 +296,14 @@ export async function handleMarketTool(name: string, args: unknown): Promise<Too
       const ethDom = global?.market_cap_percentage?.eth;
       const mcap24hChange = global?.market_cap_change_percentage_24h_usd;
 
-      const fgLabel = fg ? `${fg.value}/100 — ${fg.value_classification}` : "unavailable";
+      const fgLabel = fg ? `${fg.value}/100 - ${fg.value_classification}` : "unavailable";
       const fgEmoji = fg ? (Number(fg.value) >= 75 ? "🟢 Extreme Greed" : Number(fg.value) >= 55 ? "🟢 Greed" : Number(fg.value) >= 45 ? "🟡 Neutral" : Number(fg.value) >= 25 ? "🔴 Fear" : "🔴 Extreme Fear") : "";
 
       const lines = [
         `## 🌍 Global Crypto Market`,
         `_${new Date().toUTCString()}_`,
         ``,
-        `**Fear & Greed:** ${fgEmoji} ${fg?.value ?? "—"}/100 (${fg?.value_classification ?? "—"})`,
+        `**Fear & Greed:** ${fgEmoji} ${fg?.value ?? "-"}/100 (${fg?.value_classification ?? "-"})`,
         totalMcap ? `**Total Market Cap:** ${fmtB(totalMcap)} (${mcap24hChange != null ? `${mcap24hChange >= 0 ? "+" : ""}${fmt(mcap24hChange)}% 24h` : ""})` : "",
         btcDom != null ? `**BTC Dominance:** ${fmt(btcDom)}%  |  **ETH:** ${fmt(ethDom ?? 0)}%` : "",
         defiTvl ? `**DeFi TVL:** ${fmtB(defiTvl)}` : "",
@@ -314,7 +316,7 @@ export async function handleMarketTool(name: string, args: unknown): Promise<Too
         for (const t of trendCoins.slice(0, 7)) {
           const item = t.item;
           const rank = item.market_cap_rank ? `#${item.market_cap_rank}` : "unranked";
-          lines.push(`• **${item.symbol}** (${rank}) — ${item.name}`);
+          lines.push(`• **${item.symbol}** (${rank}) - ${item.name}`);
         }
       }
 
@@ -351,7 +353,7 @@ export async function handleMarketTool(name: string, args: unknown): Promise<Too
       const periodLow = Math.min(...lows);
 
       const lines = [
-        `## ${sym} — ${days}d History`,
+        `## ${sym} - ${days}d History`,
         ``,
         `**Current:** ${fmtPrice(c?.current_price)} (${(c?.price_change_percentage_24h ?? 0) >= 0 ? "+" : ""}${fmt(c?.price_change_percentage_24h)}% 24h)`,
         `**Period open:** ${fmtPrice(openPrice)}`,

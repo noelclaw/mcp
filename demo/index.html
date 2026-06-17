@@ -9,7 +9,7 @@
 <style>
   *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-  /* ── Design tokens — matches noelclaw.fun exactly ────────────────────────── */
+  /* ── Design tokens - matches noelclaw.fun exactly ────────────────────────── */
   :root {
     /* light */
     --page-bg:      #f0eef9;
@@ -40,7 +40,7 @@
   }
 
   html.dark {
-    /* dark — hsl(222 47% 6%) bg, hsl(222 47% 8%) card */
+    /* dark - hsl(222 47% 6%) bg, hsl(222 47% 8%) card */
     --page-bg:      #080c1e;
     --win-border:   rgba(255,255,255,0.15);
     --win-shadow:   rgba(255,255,255,0.06);
@@ -97,7 +97,7 @@
   }
   .toggle:hover { transform: scale(1.08); }
 
-  /* ── Window — sketch-card style ─────────────────────────────────────────── */
+  /* ── Window - sketch-card style ─────────────────────────────────────────── */
   .window {
     width: 700px;
     border-radius: 12px;
@@ -224,7 +224,7 @@
       <span class="btn minimize"></span>
       <span class="btn maximize"></span>
     </div>
-    <span class="title">noelclaw — ai session</span>
+    <span class="title">noelclaw - ai session</span>
   </div>
   <div class="terminal" id="t"></div>
 </div>
@@ -309,7 +309,7 @@ async function run() {
   T.innerHTML = ''
   await sleep(600)
 
-  // ── Prompt 1 — idle ───────────────────────────────────────────────────────
+  // ── Prompt 1 - idle ───────────────────────────────────────────────────────
   const p1 = mkPrompt()
   const c1 = el('span', 'cursor'); p1.appendChild(c1); T.appendChild(p1)
   await sleep(1400); c1.remove()
@@ -368,7 +368,7 @@ async function run() {
   // ── Tagline ───────────────────────────────────────────────────────────────
   const tl = el('div', 'tagline')
   tl.innerHTML =
-    `Your AI agents <em>remember everything</em> — even after you close the window.` +
+    `Your AI agents <em>remember everything</em> - even after you close the window.` +
     `<span>noelclaw.com &nbsp;·&nbsp; npx -y @noelclaw/mcp</span>`
   T.appendChild(tl)
   await sleep(60); tl.classList.add('show')

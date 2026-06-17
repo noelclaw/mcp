@@ -7,7 +7,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 // Always read the version from package.json so banner + boot strings stay in
-// sync after every npm publish — no more hand-edits in three places.
+// sync after every npm publish - no more hand-edits in three places.
 const PKG_VERSION: string = (() => {
   try {
     // dist/index.js → ../package.json (CJS so __dirname is available)
@@ -31,50 +31,82 @@ const C = {
 
 const BANNER = `
 ${C.cyan}
-  â–ˆâ–ˆâ–ˆâ•—   â–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•—      â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•—      â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•— â–ˆâ–ˆâ•—    â–ˆâ–ˆâ•—
-  â–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•â–ˆâ–ˆâ•—â–ˆâ–ˆâ•”â•â•â•â•â•â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â•â•â•â•â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â•â–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘    â–ˆâ–ˆâ•‘
-  â–ˆâ–ˆâ•”â–ˆâ–ˆâ•— â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘   â–ˆâ–ˆâ•‘â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—  â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘ â–ˆâ•— â–ˆâ–ˆâ•‘
-  â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘   â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•  â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â•â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘
-  â–ˆâ–ˆâ•‘ â•šâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ•”â–ˆâ–ˆâ–ˆâ•”â•
+  â–ˆâ–ˆâ–ˆâ•-   â–ˆâ–ˆâ•- â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•- â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•-â–ˆâ–ˆâ•-      â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•-â–ˆâ–ˆâ•-      â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•- â–ˆâ–ˆâ•-    â–ˆâ–ˆâ•-
+  â–ˆâ–ˆâ–ˆâ–ˆâ•-  â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•â–ˆâ–ˆâ•-â–ˆâ–ˆâ•”â•â•â•â•â•â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â•â•â•â•â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â•â–ˆâ–ˆâ•-â–ˆâ–ˆâ•‘    â–ˆâ–ˆâ•‘
+  â–ˆâ–ˆâ•”â–ˆâ–ˆâ•- â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘   â–ˆâ–ˆâ•‘â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•-  â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘ â–ˆâ•- â–ˆâ–ˆâ•‘
+  â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ•-â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘   â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•  â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•”â•â•â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â–ˆâ–ˆâ–ˆâ•-â–ˆâ–ˆâ•‘
+  â–ˆâ–ˆâ•‘ â•šâ–ˆâ–ˆâ–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•-â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•-â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•-â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•-â–ˆâ–ˆâ•‘  â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ–ˆâ•”â–ˆâ–ˆâ–ˆâ•”â•
   â•šâ•â•  â•šâ•â•â•â• â•šâ•â•â•â•â•â• â•šâ•â•â•â•â•â•â•â•šâ•â•â•â•â•â•â• â•šâ•â•â•â•â•â•â•šâ•â•â•â•â•â•â•â•šâ•â•  â•šâ•â• â•šâ•â•â•â•šâ•â•â•
 ${C.reset}`;
 
 function line(label: string, value: string, color = C.cyan) {
   const pad = " ".repeat(Math.max(0, 12 - label.length));
-  process.stderr.write(`  ${color}â—† ${label}${C.reset}${pad}${value}\n`);
+  process.stderr.write(`  ${color}â-† ${label}${C.reset}${pad}${value}\n`);
 }
 
 function divider() {
   process.stderr.write(`  ${C.dim}${"â”€".repeat(58)}${C.reset}\n`);
 }
 
+async function checkForUpdate(current: string): Promise<void> {
+  try {
+    const res = await fetch("https://registry.npmjs.org/@noelclaw/mcp/latest", {
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!res.ok) return;
+    const data = await res.json() as { version?: string };
+    const latest = data.version;
+    if (!latest || latest === current) return;
+    // Show update notice to stderr - visible in Claude Desktop logs and terminal
+    process.stderr.write(
+      `\n  ${C.yellow}â•"â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•-${C.reset}\n` +
+      `  ${C.yellow}â•'${C.reset}  ðŸ"¦  Update available: ${C.yellow}v${current}${C.reset} â†' ${C.cyan}v${latest}${C.reset}                         ${C.yellow}â•'${C.reset}\n` +
+      `  ${C.yellow}â•'${C.reset}  Run: ${C.cyan}npx @noelclaw/mcp@latest${C.reset} to get the latest tools     ${C.yellow}â•'${C.reset}\n` +
+      `  ${C.yellow}â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•${C.reset}\n\n`
+    );
+  } catch {
+    // Non-blocking - silently ignore network errors
+  }
+}
+
 async function main() {
   process.stderr.write(BANNER);
 
-  // â”€â”€ Tool category counts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const categories = [
-    { label: "Market",     count: 5,  tools: "get_market_data Â· get_token_data Â· compare_tokens Â· market_overview Â· token_history" },
-    { label: "Insight",    count: 3,  tools: "ask_noel Â· market_thesis Â· trade_plan" },
-    { label: "DeFi",       count: 6,  tools: "get_portfolio Â· estimate_swap Â· swap_tokens Â· send_token Â· analyze_wallet Â· get_defi_yields" },
-    { label: "Automation", count: 6,  tools: "create_automation Â· list_automations Â· pause_automation Â· delete_automation Â· get_automation_runs Â· run_automation" },
-    { label: "Swarm",      count: 5,  tools: "stop_swarm Â· get_swarm_status Â· swarm_research Â· trigger_agent Â· swarm_synthesize" },
-    { label: "Framework",  count: 3,  tools: "list_playbooks Â· run_playbook Â· get_noel_ledger" },
-    { label: "Vault",      count: 14, tools: "save Â· read Â· list Â· search Â· history Â· diff Â· export Â· credential Â· pin Â· delete Â· link Â· tag Â· related Â· related" },
-    { label: "Wallet",     count: 2,  tools: "get_wallet_address Â· set_telegram" },
-    { label: "MiroShark",  count: 3,  tools: "simulate Â· status Â· stop" },
-    { label: "Scanner",    count: 3,  tools: "scan_market Â· score_token Â· check_token" },
-    { label: "Agents",     count: 7,  tools: "list_agents Â· hire_agent Â· agent_spawn Â· agent_recall Â· agent_update Â· agent_identity Â· agent_ledger" },
-    { label: "Social",     count: 2,  tools: "humanize_text Â· write_content" },
-    { label: "Coder",      count: 5,  tools: "generate_contract Â· audit_contract Â· explain_code Â· review_code Â· generate_mcp_skill" },
-    { label: "Base",       count: 4,  tools: "query_vaults Â· list_markets Â· prepare_deposit Â· chain_stats" },
-    { label: "Memory",     count: 10, tools: "add Â· search Â· context Â· profile Â· list Â· delete Â· insight Â· extract Â· consolidate Â· publish" },
-    { label: "OS",         count: 1,  tools: "noel_status" },
-    { label: "Research",   count: 2,  tools: "web_scrape Â· web_search" },
-    { label: "Monitor",    count: 4,  tools: "schedule_research Â· create_monitor Â· list_monitors Â· cancel_monitor" },
-    { label: "GitHub",     count: 8,  tools: "list_repos Â· list_prs Â· get_pr Â· list_issues Â· get_issue Â· get_file Â· get_commits Â· search_code" },
-    { label: "Chronicle",  count: 2,  tools: "chronicle_add Â· chronicle_list" },
-    { label: "Packets",    count: 4,  tools: "packet_create Â· packet_run Â· packet_list Â· packet_share" },
+  // ── Tool category groups derived from ALL_TOOLS ────────────────────────────
+  // Categories are matched by prefix/name pattern against the actual tool
+  // registry. Counts and "tools" strings are computed live, so adding or
+  // removing a tool can never desync the banner from reality.
+  type CatRule = { label: string; match: (name: string) => boolean };
+  const CAT_RULES: CatRule[] = [
+    { label: "Market",     match: n => /^(get_market_data|get_token_data|compare_tokens|market_overview|token_history)$/.test(n) },
+    { label: "Insight",    match: n => /^(ask_noel|market_thesis|trade_plan)$/.test(n) },
+    { label: "DeFi",       match: n => n === "get_defi_yields" },
+    { label: "Base MCP",   match: n => n.startsWith("base_mcp_") },
+    { label: "Automation", match: n => /^(create_automation|list_automations|pause_automation|delete_automation|get_automation_runs|run_automation)$/.test(n) },
+    { label: "Framework",  match: n => /^(list_playbooks|run_playbook|get_noel_ledger)$/.test(n) },
+    { label: "Vault",      match: n => n.startsWith("vault_") },
+    { label: "Wallet",     match: n => /^(get_wallet_address|set_telegram)$/.test(n) },
+    { label: "MiroShark",  match: n => n.startsWith("miroshark_") },
+    { label: "Scanner",    match: n => /^(scan_market|score_token|check_token)$/.test(n) },
+    { label: "Agents",     match: n => n.startsWith("agent_") || n === "list_agents" || n === "hire_agent" },
+    { label: "Social",     match: n => /^(humanize_text|write_content)$/.test(n) },
+    { label: "Coder",      match: n => /^(generate_contract|audit_contract|explain_code|review_code|generate_mcp_skill)$/.test(n) },
+    { label: "Base",       match: n => /^(query_vaults|list_markets|prepare_deposit|chain_stats)$/.test(n) },
+    { label: "Memory",     match: n => n.startsWith("memory_") },
+    { label: "OS",         match: n => n === "noel_status" },
+    { label: "Research",   match: n => /^(web_scrape|web_search|deep_research|research_compare|research_chain)$/.test(n) },
+    { label: "Monitor",    match: n => /^(schedule_research|create_monitor|list_monitors|cancel_monitor)$/.test(n) },
+    { label: "GitHub",     match: n => n.startsWith("github_") },
+    { label: "Chronicle",  match: n => n.startsWith("chronicle_") },
+    { label: "Packets",    match: n => n.startsWith("packet_") },
   ];
+
+  const categories = CAT_RULES
+    .map(rule => {
+      const names = ALL_TOOLS.map(t => t.name).filter(rule.match);
+      return { label: rule.label, count: names.length, tools: names.join(" · ") };
+    })
+    .filter(c => c.count > 0);
 
   const total = ALL_TOOLS.length;
 
@@ -117,7 +149,7 @@ async function main() {
     process.stderr.write(`\n`);
     line("wallet",  wallet.address);
     if (hasAuth) {
-      line("auth",   `${C.green}signed in${C.reset}  ${C.dim}all 110 tools unlocked${C.reset}`, C.green);
+      line("auth",   `${C.green}signed in${C.reset}  ${C.dim}all ${ALL_TOOLS.length} tools unlocked${C.reset}`, C.green);
     } else {
       line("auth",   `${C.yellow}not signed in${C.reset}  ${C.dim}run 'noelclaw login' to unlock premium tools${C.reset}`, C.yellow);
     }
@@ -129,10 +161,13 @@ async function main() {
     line("status",  `${C.green}ready${C.reset}  ${C.dim}wallet tools require setup${C.reset}`, C.green);
     process.stderr.write(`\n`);
   }
+
+  // Check for updates async - fires 3s after startup so it doesn't delay boot
+  setTimeout(() => { checkForUpdate(PKG_VERSION).catch(() => {}); }, 3_000);
 }
 
 async function loginFlow() {
-  process.stderr.write(`\n  ${C.cyan}â—† noelclaw login${C.reset}\n\n`);
+  process.stderr.write(`\n  ${C.cyan}â-† noelclaw login${C.reset}\n\n`);
   process.stderr.write(`  Get your session token from ${C.cyan}app.noelclaw.com${C.reset} â†’ Settings\n\n`);
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
@@ -145,12 +180,16 @@ async function loginFlow() {
   });
 
   if (!token || !token.startsWith("noel_")) {
-    process.stderr.write(`\n  ${C.yellow}âœ— Invalid token â€” should start with noel_${C.reset}\n\n`);
+    process.stderr.write(`\n  ${C.yellow}âœ- Invalid token â€” should start with noel_${C.reset}\n\n`);
     process.exit(1);
   }
 
-  // Verify token against API
-  const siteUrl = process.env.CONVEX_SITE_URL ?? "https://noelclaw.convex.site";
+  // Verify token against API. Use the same env var + default as the rest
+  // of the binary (cli.ts, llm.ts, convex.ts all use NOELCLAW_CONVEX_URL).
+  // Earlier versions defaulted to noelclaw.convex.site here, which meant
+  // `noelclaw login` could hit a different host than runtime tool calls
+  // - confusing when users override one env var.
+  const siteUrl = process.env.NOELCLAW_CONVEX_URL ?? "https://api.noelclaw.com";
   let authFailed = false;
   try {
     const res = await fetch(`${siteUrl}/auth/me`, {
@@ -166,10 +205,10 @@ async function loginFlow() {
     writeConfig({ sessionToken: token, email: data.user?.email });
     process.stderr.write(`\n  ${C.green}âœ“ Signed in as ${data.user?.email ?? data.user?.username}${C.reset}\n`);
     process.stderr.write(`  ${C.dim}Token saved to ~/.noelclaw/config.json${C.reset}\n`);
-    process.stderr.write(`  ${C.dim}All 110 tools now unlocked.${C.reset}\n\n`);
+    process.stderr.write(`  ${C.dim}All ${ALL_TOOLS.length} tools now unlocked.${C.reset}\n\n`);
   } catch (err: any) {
     if (authFailed) {
-      process.stderr.write(`\n  ${C.yellow}âœ— ${err.message} â€” check your token at app.noelclaw.com${C.reset}\n\n`);
+      process.stderr.write(`\n  ${C.yellow}âœ- ${err.message} â€” check your token at app.noelclaw.com${C.reset}\n\n`);
       process.exit(1);
     }
     // Network error â€” save token anyway, will be validated on first tool call

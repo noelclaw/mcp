@@ -1,10 +1,11 @@
 import { z } from "zod";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { callLLM } from "../llm.js";
+import { staticScanSolidity, formatFindings, AUDIT_DISCLAIMER } from "./_solidity-scan.js";
 
 type ToolResult = { content: Array<{ type: "text"; text: string }>; isError?: boolean };
 
-const CODER_SYSTEM = `You are Noel Coder — an expert software engineer embedded in the Noelclaw AI OS on Base chain.
+const CODER_SYSTEM = `You are Noel Coder - an expert software engineer embedded in the Noelclaw runtime, with deep experience on Base chain.
 You specialize in:
 - Solidity smart contracts (ERC-20, ERC-721, DeFi hooks, Uniswap v3/v4 integrations)
 - TypeScript / React / Next.js frontend development
@@ -41,7 +42,7 @@ export const CODER_TOOLS: Tool[] = [
       properties: {
         description: {
           type: "string",
-          description: "What the contract does — token type, mechanics, access control, any special logic",
+          description: "What the contract does - token type, mechanics, access control, any special logic",
         },
         name: {
           type: "string",
@@ -60,8 +61,11 @@ export const CODER_TOOLS: Tool[] = [
   {
     name: "audit_contract",
     description:
-      "Audit a Solidity smart contract for security vulnerabilities, gas inefficiencies, and logic bugs. " +
-      "Returns a structured report with severity ratings and fix recommendations.",
+      "Audit a Solidity smart contract. Runs an automated static scan over the source for common antipatterns " +
+      "(tx.origin auth, reentrancy ordering, unchecked low-level calls, delegatecall hijack, floating pragma, etc.) " +
+      "and then has the LLM review each static finding plus look for issues the pattern scan missed. " +
+      "Returns a structured report with severity ratings, fix recommendations, and a mandatory disclaimer that this " +
+      "is NOT a substitute for a professional audit (CertiK, Trail of Bits, OpenZeppelin) or formal verification.",
     inputSchema: {
       type: "object",
       properties: {
@@ -105,7 +109,7 @@ export const CODER_TOOLS: Tool[] = [
     name: "generate_mcp_skill",
     description:
       "Generate a complete Claude Code skill (.md file) from a description. " +
-      "Skills are slash-command workflows that run inside Claude Code — they can call tools, " +
+      "Skills are slash-command workflows that run inside Claude Code - they can call tools, " +
       "loop, delegate to subagents, and have persistent behavior. " +
       "Returns a ready-to-use .md file you can drop into your .claude/skills/ directory. " +
       "Use this to automate repetitive Claude Code workflows without writing TypeScript.",
@@ -114,7 +118,7 @@ export const CODER_TOOLS: Tool[] = [
       properties: {
         description: {
           type: "string",
-          description: "What the skill should do — be specific about inputs, outputs, and any tools it should use",
+          description: "What the skill should do - be specific about inputs, outputs, and any tools it should use",
         },
         name: {
           type: "string",
@@ -222,29 +226,72 @@ export async function handleCoderTool(name: string, args: unknown): Promise<Tool
       if (!p.success) return err(`Invalid input: ${p.error.message}`);
       const { code, focus = [] } = p.data;
 
+      // ─── Stage 1: Static heuristic scan ─────────────────────────────────
+      // Pattern-based pre-scan grounds the audit. The LLM gets these findings
+      // as input context and is told to evaluate each one (confirm, refute,
+      // or supplement). Without this stage the audit is pure model opinion
+      // and dangerous - a user might trust "looks safe" with no basis.
+      const findings = staticScanSolidity(code);
+      const findingsBlock = formatFindings(findings);
+      const criticalCount = findings.filter((f) => f.severity === "critical").length;
+      const highCount = findings.filter((f) => f.severity === "high").length;
+
+      // ─── Stage 2: LLM review grounded in findings ───────────────────────
       const prompt =
-        `Audit the following Solidity smart contract for security vulnerabilities, gas issues, and logic bugs.\n` +
-        (focus.length ? `Focus areas: ${focus.join(", ")}\n` : "") +
-        `\nContract:\n\`\`\`solidity\n${code}\n\`\`\`\n\n` +
-        `Output a structured audit report with these sections:\n` +
-        `## Summary\n` +
-        `(overall risk rating: Critical/High/Medium/Low/Informational, brief overview)\n\n` +
-        `## Findings\n` +
-        `For each issue:\n` +
+        `Audit the following Solidity smart contract.\n\n` +
+        (focus.length ? `User-requested focus: ${focus.join(", ")}\n\n` : "") +
+        `### Automated static scan findings\n\n` +
+        `${findingsBlock}\n\n` +
+        `### Contract source\n\n` +
+        `\`\`\`solidity\n${code}\n\`\`\`\n\n` +
+        `Produce the report in this exact structure:\n\n` +
+        `## Overall risk\n` +
+        `One-line rating (Critical / High / Medium / Low / Informational) + a single sentence justification. ` +
+        `If the static scan above shows ≥ 1 critical or ≥ 2 high findings, the overall rating must be at least High unless you explicitly refute the static findings with reasoning.\n\n` +
+        `## Static findings review\n` +
+        `For each finding listed above, write one paragraph: confirm the risk OR refute as a false positive with specific reasoning. Do NOT skip any finding. Use this format:\n` +
+        `- **\`<ID>\`** - confirmed/refuted/needs-context - (1-3 sentence explanation)\n\n` +
+        `## Additional findings (beyond the static scan)\n` +
+        `Issues the static scan didn't catch. For each:\n` +
         `- **[SEVERITY]** Title\n` +
         `  - Location: (function/line)\n` +
         `  - Description: (what's wrong and why)\n` +
         `  - Recommendation: (exact fix or mitigation)\n\n` +
-        `## Gas Optimizations\n` +
-        `(list 2-5 concrete gas savings with estimated impact)\n\n` +
-        `## Positive Patterns\n` +
-        `(what the contract does well)`;
+        `If you have no additional findings beyond the static scan, write "No additional findings."\n\n` +
+        `## Gas optimizations\n` +
+        `2-5 concrete gas savings with estimated impact. Skip the section if the contract is well-optimized.\n\n` +
+        `## Positive patterns\n` +
+        `What the contract does well. Keep terse - 3-5 bullets max.\n\n` +
+        `Rules:\n` +
+        `- Do NOT claim the contract is "secure" or "safe" - those words imply guarantees the LLM cannot make.\n` +
+        `- Use phrasing like "no obvious issues found in [X] under [scope]" or "matches expected patterns for [Y]".\n` +
+        `- If you're uncertain about a finding, say so explicitly.`;
 
       try {
-        const response = await callLLM(CODER_SYSTEM, prompt, 3000);
-        return ok(response);
+        const response = await callLLM(CODER_SYSTEM, prompt, 3500);
+
+        const header = [
+          `# Smart Contract Audit Report`,
+          ``,
+          `**Static scan:** ${findings.length} finding(s) - ${criticalCount} critical · ${highCount} high · ${findings.length - criticalCount - highCount} medium/low/info`,
+          ``,
+        ].join("\n");
+
+        return ok(`${header}${response}${AUDIT_DISCLAIMER}`);
       } catch (e: any) {
-        return err(`audit_contract failed: ${e.message}`);
+        // Even on LLM failure, return the static scan results so the user
+        // gets something actionable.
+        const fallback = [
+          `# Smart Contract Audit Report (static scan only - LLM unavailable)`,
+          ``,
+          `LLM review failed: ${e.message}`,
+          ``,
+          `## Automated static scan findings`,
+          ``,
+          findingsBlock,
+          AUDIT_DISCLAIMER,
+        ].join("\n");
+        return ok(fallback);
       }
     }
 
@@ -286,7 +333,7 @@ export async function handleCoderTool(name: string, args: unknown): Promise<Tool
         `## What I changed\n` +
         `(bullet list: each change and why)\n\n` +
         `## Improved code\n` +
-        `\`\`\`\n(full improved code — no omissions, no "rest of code unchanged")\n\`\`\`\n\n` +
+        `\`\`\`\n(full improved code - no omissions, no "rest of code unchanged")\n\`\`\`\n\n` +
         `## Further recommendations\n` +
         `(optional: things to consider beyond this snippet)`;
 
@@ -317,14 +364,14 @@ export async function handleCoderTool(name: string, args: unknown): Promise<Tool
         `- Include a "## Output" section describing what the skill produces\n` +
         `- Steps can reference tool calls like "Use the Bash tool to run X" or "Use memory_search to find Y"\n` +
         `- Steps can reference conditional logic and loops\n` +
-        `- Keep it under 200 lines — skills should be focused, not monolithic\n` +
+        `- Keep it under 200 lines - skills should be focused, not monolithic\n` +
         `- Write in imperative second person ("Run...", "Check...", "If X, then...")\n` +
-        `- Do NOT include markdown fences around the output — output the raw .md content directly\n\n` +
+        `- Do NOT include markdown fences around the output - output the raw .md content directly\n\n` +
         `Output only the .md file content, ready to save as .claude/skills/${skillName}.md`;
 
       try {
         const response = await callLLM(CODER_SYSTEM, prompt, 2000);
-        return ok(`# /${skillName} skill — save to .claude/skills/${skillName}.md\n\n---\n\n${response}`);
+        return ok(`# /${skillName} skill - save to .claude/skills/${skillName}.md\n\n---\n\n${response}`);
       } catch (e: any) {
         return err(`generate_mcp_skill failed: ${e.message}`);
       }

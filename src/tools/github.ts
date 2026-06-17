@@ -8,7 +8,7 @@ function ghHeaders(): Record<string, string> {
   const h: Record<string, string> = {
     Accept: "application/vnd.github.v3+json",
     "X-GitHub-Api-Version": "2022-11-28",
-    "User-Agent": "noelclaw-mcp/3.4.0",
+    "User-Agent": "noelclaw-mcp/3.28.0",
   };
   if (token) h.Authorization = `Bearer ${token}`;
   return h;
@@ -26,8 +26,24 @@ async function gh(path: string): Promise<any> {
   return res.json();
 }
 
-function text(data: unknown): ToolResult {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+function md(text: string): ToolResult {
+  return { content: [{ type: "text" as const, text }] };
+}
+
+function fmtDate(iso: string | undefined): string {
+  if (!iso) return "—";
+  return new Date(iso).toISOString().slice(0, 10);
+}
+
+function langExt(filename: string): string {
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+  const map: Record<string, string> = {
+    ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
+    py: "python", rb: "ruby", go: "go", rs: "rust", java: "java",
+    cs: "csharp", cpp: "cpp", c: "c", sh: "bash", yaml: "yaml", yml: "yaml",
+    json: "json", toml: "toml", md: "markdown", html: "html", css: "css", sql: "sql",
+  };
+  return map[ext] ?? ext;
 }
 
 export const GITHUB_TOOLS: Tool[] = [
@@ -62,7 +78,7 @@ export const GITHUB_TOOLS: Tool[] = [
   {
     name: "github_get_pr",
     description:
-      "Get full details of a pull request — title, body, diff summary, changed files, reviews, and comments. " +
+      "Get full details of a pull request - title, body, diff summary, changed files, reviews, and comments. " +
       "Use to understand what a PR does before reviewing or merging.",
     inputSchema: {
       type: "object",
@@ -154,43 +170,36 @@ export async function handleGithubTool(name: string, args: unknown): Promise<Too
     case "github_list_repos": {
       const sort     = a.sort ?? "updated";
       const per_page = Math.min(a.per_page ?? 20, 100);
-      const path     = a.username
+      const ghPath   = a.username
         ? `/users/${encodeURIComponent(a.username)}/repos?sort=${sort}&per_page=${per_page}`
         : `/user/repos?type=owner&sort=${sort}&per_page=${per_page}`;
-      const repos: any[] = await gh(path);
-      return text(repos.map(r => ({
-        name:           r.full_name,
-        description:    r.description,
-        language:       r.language,
-        stars:          r.stargazers_count,
-        forks:          r.forks_count,
-        updated:        r.updated_at,
-        default_branch: r.default_branch,
-        private:        r.private,
-        url:            r.html_url,
-      })));
+      const repos: any[] = await gh(ghPath);
+      const who = a.username ?? "you";
+      const header = `## GitHub Repos — ${who} (${repos.length})\n`;
+      const rows = repos.map(r => {
+        const vis = r.private ? "🔒" : "📂";
+        const lang = r.language ? ` · ${r.language}` : "";
+        const desc = r.description ? `\n   ${r.description.slice(0, 100)}` : "";
+        return `${vis} **[${r.full_name}](${r.html_url})** ⭐${r.stargazers_count} 🍴${r.forks_count}${lang} · ${fmtDate(r.updated_at)}${desc}`;
+      });
+      return md([header, ...rows].join("\n"));
     }
 
     case "github_list_prs": {
       const { owner, repo, state = "open" } = a;
       const per_page = Math.min(a.per_page ?? 15, 100);
       const prs: any[] = await gh(`/repos/${owner}/${repo}/pulls?state=${state}&per_page=${per_page}`);
-      return text(prs.map(p => ({
-        number:        p.number,
-        title:         p.title,
-        state:         p.state,
-        author:        p.user?.login,
-        draft:         p.draft,
-        head:          p.head?.ref,
-        base:          p.base?.ref,
-        additions:     p.additions,
-        deletions:     p.deletions,
-        changed_files: p.changed_files,
-        created:       p.created_at,
-        updated:       p.updated_at,
-        url:           p.html_url,
-        body:          p.body?.slice(0, 300),
-      })));
+      if (!prs.length) return md(`No ${state} PRs in **${owner}/${repo}**.`);
+      const header = `## PRs — ${owner}/${repo} (${state}, ${prs.length})\n`;
+      const rows = prs.map(p => {
+        const draft = p.draft ? " `draft`" : "";
+        const changes = (p.additions != null)
+          ? ` · \`+${p.additions}/-${p.deletions}\``
+          : "";
+        const body = p.body ? `\n   ${p.body.slice(0, 120).replace(/\n/g, " ")}…` : "";
+        return `**#${p.number}** [${p.title}](${p.html_url})${draft}\n   @${p.user?.login} · \`${p.head?.ref}\` → \`${p.base?.ref}\`${changes} · ${fmtDate(p.updated_at)}${body}`;
+      });
+      return md([header, ...rows].join("\n\n"));
     }
 
     case "github_get_pr": {
@@ -201,64 +210,56 @@ export async function handleGithubTool(name: string, args: unknown): Promise<Too
         gh(`/repos/${owner}/${repo}/pulls/${pr_number}/reviews`),
         gh(`/repos/${owner}/${repo}/issues/${pr_number}/comments`),
       ]);
-      return text({
-        number:        pr.number,
-        title:         pr.title,
-        state:         pr.state,
-        author:        pr.user?.login,
-        body:          pr.body?.slice(0, 2000),
-        head:          pr.head?.ref,
-        base:          pr.base?.ref,
-        draft:         pr.draft,
-        additions:     pr.additions,
-        deletions:     pr.deletions,
-        changed_files: pr.changed_files,
-        mergeable:     pr.mergeable,
-        url:           pr.html_url,
-        files: files.slice(0, 30).map((f: any) => ({
-          filename:  f.filename,
-          status:    f.status,
-          additions: f.additions,
-          deletions: f.deletions,
-          patch:     f.patch?.slice(0, 1200),
-        })),
-        reviews: reviews.map((r: any) => ({
-          author:    r.user?.login,
-          state:     r.state,
-          body:      r.body?.slice(0, 500),
-          submitted: r.submitted_at,
-        })),
-        comments: comments.slice(0, 10).map((c: any) => ({
-          author:  c.user?.login,
-          body:    c.body?.slice(0, 500),
-          created: c.created_at,
-        })),
-      });
+      const stateEmoji = pr.state === "open" ? (pr.draft ? "🟡 Draft" : "🟢 Open") : "🟣 Merged";
+      const lines: string[] = [
+        `## PR #${pr.number} — ${pr.title}`,
+        `${stateEmoji} · @${pr.user?.login} · \`${pr.head?.ref}\` → \`${pr.base?.ref}\` · ${fmtDate(pr.updated_at)}`,
+        `\`+${pr.additions ?? 0}/-${pr.deletions ?? 0}\` across ${pr.changed_files ?? 0} files · [View on GitHub](${pr.html_url})`,
+      ];
+      if (pr.body) {
+        lines.push("", "### Description", pr.body.slice(0, 1500));
+      }
+      if (files?.length) {
+        lines.push("", "### Changed Files");
+        for (const f of files.slice(0, 25)) {
+          const s = f.status === "added" ? "+" : f.status === "removed" ? "-" : "~";
+          lines.push(`\`${s}\` \`${f.filename}\` (+${f.additions}/-${f.deletions})`);
+          if (f.patch) lines.push(`\`\`\`diff\n${f.patch.slice(0, 800)}\n\`\`\``);
+        }
+        if (files.length > 25) lines.push(`_…and ${files.length - 25} more files_`);
+      }
+      if (reviews?.length) {
+        lines.push("", "### Reviews");
+        for (const r of reviews) {
+          if (!r.body && r.state === "COMMENTED") continue;
+          lines.push(`**@${r.user?.login}** ${r.state} · ${fmtDate(r.submitted_at)}${r.body ? `\n> ${r.body.slice(0, 300)}` : ""}`);
+        }
+      }
+      if (comments?.length) {
+        lines.push("", "### Comments");
+        for (const c of comments.slice(0, 8)) {
+          lines.push(`**@${c.user?.login}** · ${fmtDate(c.created_at)}\n> ${c.body?.slice(0, 400)}`);
+        }
+      }
+      return md(lines.join("\n"));
     }
 
     case "github_list_issues": {
       const { owner, repo, state = "open", labels } = a;
       const per_page = Math.min(a.per_page ?? 15, 100);
-      let path = `/repos/${owner}/${repo}/issues?state=${state}&per_page=${per_page}`;
-      if (labels) path += `&labels=${encodeURIComponent(labels)}`;
-      const issues: any[] = await gh(path);
-      return text(
-        issues
-          .filter((i: any) => !i.pull_request)
-          .map((i: any) => ({
-            number:    i.number,
-            title:     i.title,
-            state:     i.state,
-            author:    i.user?.login,
-            labels:    i.labels?.map((l: any) => l.name),
-            assignees: i.assignees?.map((a: any) => a.login),
-            comments:  i.comments,
-            created:   i.created_at,
-            updated:   i.updated_at,
-            url:       i.html_url,
-            body:      i.body?.slice(0, 300),
-          }))
-      );
+      let issuePath = `/repos/${owner}/${repo}/issues?state=${state}&per_page=${per_page}`;
+      if (labels) issuePath += `&labels=${encodeURIComponent(labels)}`;
+      const all: any[] = await gh(issuePath);
+      const issues = all.filter((i: any) => !i.pull_request);
+      if (!issues.length) return md(`No ${state} issues in **${owner}/${repo}**${labels ? ` with labels: ${labels}` : ""}.`);
+      const header = `## Issues — ${owner}/${repo} (${state}, ${issues.length})\n`;
+      const rows = issues.map((i: any) => {
+        const lbls = i.labels?.length ? ` · ${i.labels.map((l: any) => `\`${l.name}\``).join(" ")}` : "";
+        const cmts = i.comments ? ` · 💬${i.comments}` : "";
+        const body = i.body ? `\n   ${i.body.slice(0, 100).replace(/\n/g, " ")}…` : "";
+        return `**#${i.number}** [${i.title}](${i.html_url})\n   @${i.user?.login}${lbls}${cmts} · ${fmtDate(i.updated_at)}${body}`;
+      });
+      return md([header, ...rows].join("\n\n"));
     }
 
     case "github_get_issue": {
@@ -267,73 +268,128 @@ export async function handleGithubTool(name: string, args: unknown): Promise<Too
         gh(`/repos/${owner}/${repo}/issues/${issue_number}`),
         gh(`/repos/${owner}/${repo}/issues/${issue_number}/comments?per_page=20`),
       ]);
-      return text({
-        number:    issue.number,
-        title:     issue.title,
-        state:     issue.state,
-        author:    issue.user?.login,
-        labels:    issue.labels?.map((l: any) => l.name),
-        assignees: issue.assignees?.map((a: any) => a.login),
-        body:      issue.body?.slice(0, 3000),
-        created:   issue.created_at,
-        updated:   issue.updated_at,
-        url:       issue.html_url,
-        comments:  comments.map((c: any) => ({
-          author:  c.user?.login,
-          body:    c.body?.slice(0, 1000),
-          created: c.created_at,
-        })),
-      });
+      const lbls = issue.labels?.length ? issue.labels.map((l: any) => `\`${l.name}\``).join(" ") : "";
+      const assignees = issue.assignees?.length ? `Assigned: @${issue.assignees.map((a: any) => a.login).join(", @")}` : "";
+      const lines: string[] = [
+        `## Issue #${issue.number} — ${issue.title}`,
+        `${issue.state === "open" ? "🟢 Open" : "🔴 Closed"} · @${issue.user?.login} · ${fmtDate(issue.created_at)} · [View on GitHub](${issue.html_url})`,
+      ];
+      if (lbls) lines.push(lbls);
+      if (assignees) lines.push(assignees);
+      if (issue.body) lines.push("", issue.body.slice(0, 3000));
+      if (comments?.length) {
+        lines.push("", `---`, "", `### Comments (${comments.length})`);
+        for (const c of comments) {
+          lines.push(`**@${c.user?.login}** · ${fmtDate(c.created_at)}`);
+          lines.push(c.body?.slice(0, 1000) ?? "");
+          lines.push("");
+        }
+      }
+      return md(lines.join("\n"));
     }
 
     case "github_get_file": {
       const { owner, repo, path: filePath, ref } = a;
-      let url = `/repos/${owner}/${repo}/contents/${filePath}`;
-      if (ref) url += `?ref=${encodeURIComponent(ref)}`;
-      const data: any = await gh(url);
+      let fileUrl = `/repos/${owner}/${repo}/contents/${filePath}`;
+      if (ref) fileUrl += `?ref=${encodeURIComponent(ref)}`;
+      const data: any = await gh(fileUrl);
       if (data.type !== "file") {
-        return { content: [{ type: "text" as const, text: `Not a file — got type: ${data.type}. Specify a full file path.` }] };
+        return md(`Not a file — got type \`${data.type}\`. Specify a full file path, not a directory.`);
       }
       const content = Buffer.from(data.content.replace(/\n/g, ""), "base64").toString("utf-8");
-      return text({
-        path:      data.path,
-        size:      data.size,
-        sha:       data.sha,
-        url:       data.html_url,
-        content:   content.slice(0, 10000),
-        truncated: content.length > 10000,
-      });
+      const truncated = content.length > 10000;
+      const lang = langExt(filePath);
+      const lines = [
+        `## \`${data.path}\` — ${owner}/${repo}${ref ? ` @ ${ref}` : ""}`,
+        `Size: ${(data.size / 1024).toFixed(1)}KB · SHA: \`${data.sha?.slice(0, 8)}\` · [View on GitHub](${data.html_url})`,
+        "",
+        `\`\`\`${lang}`,
+        content.slice(0, 10000),
+        "```",
+      ];
+      if (truncated) lines.push(`\n_File truncated at 10,000 chars (${(content.length / 1024).toFixed(1)}KB total)._`);
+      return md(lines.join("\n"));
     }
 
     case "github_get_commits": {
       const { owner, repo, branch, path: filePath } = a;
       const per_page = Math.min(a.per_page ?? 15, 100);
-      let url = `/repos/${owner}/${repo}/commits?per_page=${per_page}`;
-      if (branch) url += `&sha=${encodeURIComponent(branch)}`;
-      if (filePath) url += `&path=${encodeURIComponent(filePath)}`;
-      const commits: any[] = await gh(url);
-      return text(commits.map(c => ({
-        sha:     c.sha?.slice(0, 8),
-        message: c.commit?.message?.split("\n")[0].slice(0, 120),
-        author:  c.commit?.author?.name,
-        date:    c.commit?.author?.date,
-        url:     c.html_url,
-      })));
+      let commitUrl = `/repos/${owner}/${repo}/commits?per_page=${per_page}`;
+      if (branch) commitUrl += `&sha=${encodeURIComponent(branch)}`;
+      if (filePath) commitUrl += `&path=${encodeURIComponent(filePath)}`;
+      const commits: any[] = await gh(commitUrl);
+      if (!commits.length) return md(`No commits found in **${owner}/${repo}**${branch ? ` @ ${branch}` : ""}${filePath ? ` for \`${filePath}\`` : ""}.`);
+      const filter = filePath ? ` · \`${filePath}\`` : "";
+      const header = `## Commits — ${owner}/${repo}${branch ? ` @ ${branch}` : ""}${filter} (${commits.length})\n`;
+      const rows = commits.map(c => {
+        const msg = c.commit?.message?.split("\n")[0].slice(0, 100) ?? "(no message)";
+        const author = c.commit?.author?.name ?? c.author?.login ?? "unknown";
+        const sha = c.sha?.slice(0, 7);
+        return `\`${sha}\` **${msg}**\n   @${author} · ${fmtDate(c.commit?.author?.date)} · [↗](${c.html_url})`;
+      });
+      return md([header, ...rows].join("\n\n"));
     }
 
     case "github_search_code": {
+      // GitHub's code-search endpoint requires authentication. Without
+      // GITHUB_TOKEN it returns 422 with a non-obvious message. Detect that
+      // case upfront and give the user a concrete setup path instead of an
+      // opaque error.
+      if (!process.env.GITHUB_TOKEN) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: [
+              `❌ **github_search_code requires authentication**`,
+              ``,
+              `GitHub's code-search API does not work for anonymous callers - they return 422.`,
+              `Other \`github_*\` tools work without a token (rate-limited to 60 req/hr).`,
+              ``,
+              `**Setup (one-time):**`,
+              ``,
+              `1. Create a personal access token: https://github.com/settings/tokens`,
+              `2. Minimum scopes needed: \`public_repo\` (or \`repo\` for private)`,
+              `3. Set the env var in your MCP client config:`,
+              ``,
+              `   \`\`\`json`,
+              `   {`,
+              `     "mcpServers": {`,
+              `       "noelclaw": {`,
+              `         "command": "npx",`,
+              `         "args": ["-y", "@noelclaw/mcp"],`,
+              `         "env": { "GITHUB_TOKEN": "ghp_..." }`,
+              `       }`,
+              `     }`,
+              `   }`,
+              `   \`\`\``,
+              ``,
+              `4. Restart the MCP client.`,
+              ``,
+              `Authenticated rate limit: 5,000 req/hr (vs 60 unauthenticated for non-search endpoints).`,
+            ].join("\n"),
+          }],
+          isError: true,
+        };
+      }
       const { query } = a;
       const per_page = Math.min(a.per_page ?? 10, 30);
-      const data: any = await gh(`/search/code?q=${encodeURIComponent(query)}&per_page=${per_page}`);
-      return text({
-        total_count: data.total_count,
-        results: data.items?.map((item: any) => ({
-          path: item.path,
-          repo: item.repository?.full_name,
-          url:  item.html_url,
-          sha:  item.sha?.slice(0, 8),
-        })),
-      });
+      try {
+        const data: any = await gh(`/search/code?q=${encodeURIComponent(query)}&per_page=${per_page}`);
+        const items: any[] = data.items ?? [];
+        const header = `## Code Search — \`${query}\`\n${data.total_count?.toLocaleString()} total results (showing ${items.length})\n`;
+        const rows = items.map((item: any) =>
+          `**[\`${item.path}\`](${item.html_url})** · ${item.repository?.full_name}`
+        );
+        return md([header, ...rows].join("\n"));
+      } catch (e: any) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `github_search_code failed: ${e.message}\n\nIf this says "Unprocessable Entity" or 422, your GITHUB_TOKEN may lack required scopes - needs at least \`public_repo\`.`,
+          }],
+          isError: true,
+        };
+      }
     }
 
     default:

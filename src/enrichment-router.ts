@@ -14,7 +14,7 @@
 //   - arXiv (academic papers)
 //   - Wikipedia REST (foundational facts)
 //
-// All calls are best-effort with short timeouts — if any fail, the
+// All calls are best-effort with short timeouts - if any fail, the
 // synthesis runs without that block.
 
 export type EnrichmentBlock = {
@@ -106,7 +106,7 @@ async function cryptoEnrich(query: string): Promise<string | null> {
                 .join(" · ")
             : "";
           blocks.push([
-            `### 📊 DefiLlama — ${d.name}`,
+            `### 📊 DefiLlama - ${d.name}`,
             `- TVL: **${formatUsd(d.tvl)}** | 24h: ${d.change_1d?.toFixed(2) ?? "n/a"}% | 7d: ${d.change_7d?.toFixed(2) ?? "n/a"}%`,
             d.mcap ? `- Market cap: ${formatUsd(d.mcap)}` : "",
             chainBreakdown ? `- Top chains: ${chainBreakdown}` : "",
@@ -174,7 +174,7 @@ async function cryptoEnrich(query: string): Promise<string | null> {
 async function techEnrich(query: string): Promise<string | null> {
   const blocks: string[] = [];
 
-  // HackerNews — last 30 days, sorted by relevance + popularity
+  // HackerNews - last 30 days, sorted by relevance + popularity
   try {
     const since = Math.floor((Date.now() - 30 * 86_400_000) / 1000);
     const url = `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(query)}&numericFilters=created_at_i>${since}&hitsPerPage=8`;
@@ -197,7 +197,7 @@ async function techEnrich(query: string): Promise<string | null> {
     }
   } catch { /* ignore */ }
 
-  // GitHub search — public repos matching query
+  // GitHub search - public repos matching query
   try {
     const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(query)}&sort=stars&order=desc&per_page=6`;
     const res = await fetch(url, {
@@ -211,7 +211,7 @@ async function techEnrich(query: string): Promise<string | null> {
         const rows = repos.slice(0, 5).map((r) => {
           const stars = r.stargazers_count?.toLocaleString() ?? "?";
           const desc = clipText(r.description ?? "", 100);
-          return `- **${r.full_name}** (★${stars}) — ${desc}\n  ${r.html_url}`;
+          return `- **${r.full_name}** (★${stars}) - ${desc}\n  ${r.html_url}`;
         }).join("\n");
         blocks.push(`### 🐙 GitHub (top repos by stars)\n${rows}\n- Source: https://github.com/search?q=${encodeURIComponent(query)}`);
       }
@@ -251,7 +251,7 @@ async function academicEnrich(query: string): Promise<string | null> {
 
 async function generalEnrich(query: string): Promise<string | null> {
   try {
-    // Wikipedia search — find best matching article
+    // Wikipedia search - find best matching article
     const searchRes = await fetch(
       `https://en.wikipedia.org/w/api.php?action=opensearch&format=json&search=${encodeURIComponent(query)}&limit=3`,
       { signal: AbortSignal.timeout(6_000) },
@@ -270,7 +270,7 @@ async function generalEnrich(query: string): Promise<string | null> {
     const summary = (await sumRes.json()) as any;
 
     const lines = [
-      `### 🌐 Wikipedia — ${summary.title ?? top}`,
+      `### 🌐 Wikipedia - ${summary.title ?? top}`,
       summary.extract ? clipText(summary.extract, 600) : descs[0] ?? "",
       `- Source: ${urls[0] ?? `https://en.wikipedia.org/wiki/${encodeURIComponent(top)}`}`,
     ];
@@ -315,7 +315,7 @@ export async function enrichQuery(query: string): Promise<EnrichmentBlock> {
 
   const context = [
     `---`,
-    `## 🔒 AUTHORITATIVE LIVE DATA — fetched ${todayISO}`,
+    `## 🔒 AUTHORITATIVE LIVE DATA - fetched ${todayISO}`,
     ``,
     `The blocks below come from primary-source APIs called at query time. Treat as ground truth. When figures here conflict with the scraped sources below, prefer these and cite them by source name (e.g. \`[DefiLlama]\`, \`[HackerNews]\`, \`[arXiv]\`, \`[GitHub]\`, \`[Wikipedia]\`).`,
     ``,
@@ -328,7 +328,7 @@ export async function enrichQuery(query: string): Promise<EnrichmentBlock> {
 
 /**
  * Returns the current date in ISO format. Used by the synthesis prompt to
- * anchor the LLM in time — prevents "Q2 2026 catalysts in July" style
+ * anchor the LLM in time - prevents "Q2 2026 catalysts in July" style
  * calendar hallucinations.
  */
 export function todayContext(): string {

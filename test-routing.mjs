@@ -1,12 +1,12 @@
 /**
- * test-routing.mjs — run with: node test-routing.mjs
+ * test-routing.mjs - run with: node test-routing.mjs
  *
  * Tests:
  *  1. LLM routing priority (Bankr-first)
  *  2. Agent-loop routing priority (Bankr-first, no grok-3)
  *  3. Bankr adapter: toOpenAITools()
- *  4. Bankr adapter: anthropicMsgsToOpenAI() — including tool_use/tool_result blocks
- *  5. Bankr adapter: normalizeOpenAIResponse() — tool_use and end_turn stop reasons
+ *  4. Bankr adapter: anthropicMsgsToOpenAI() - including tool_use/tool_result blocks
+ *  5. Bankr adapter: normalizeOpenAIResponse() - tool_use and end_turn stop reasons
  *  6. noelAIChat() falls back to Anthropic when flag is off
  */
 
@@ -70,7 +70,7 @@ console.log('\n2. agent-loop.ts routing priority');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3-5. Bankr adapter functions — copy from noel-ai.js and test directly
+// 3-5. Bankr adapter functions - copy from noel-ai.js and test directly
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── toOpenAITools ─────────────────────────────────────────────────────────────
@@ -259,7 +259,7 @@ console.log('\n5. normalizeOpenAIResponse()');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 6. Feature flag — Bankr path off by default
+// 6. Feature flag - Bankr path off by default
 // ─────────────────────────────────────────────────────────────────────────────
 console.log('\n6. Feature flag');
 {

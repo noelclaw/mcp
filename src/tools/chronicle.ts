@@ -2,16 +2,16 @@ import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { callConvex } from "../convex.js";
 import type { ToolResult } from "../types.js";
 
-const CHRONICLE_TYPES = ["vault", "memory", "swarm", "agent", "tool", "automation", "monitor", "custom"] as const;
+const CHRONICLE_TYPES = ["vault", "memory", "agent", "tool", "automation", "monitor", "system", "custom"] as const;
 
 export const CHRONICLE_TOOLS: Tool[] = [
   {
     name: "chronicle_add",
     description:
-      "Log an event to Noel Chronicle — the system-wide event log for your AI OS. " +
-      "Records anything meaningful: vault saves, swarm runs, agent hires, automation triggers, " +
+      "Log an event to Noel Chronicle - the system-wide audit log for your AI runtime. " +
+      "Records anything meaningful: vault saves, agent updates, automation triggers, " +
       "custom milestones, research completions. Chronicle is your permanent timeline of what happened. " +
-      "Types: vault | memory | swarm | agent | tool | automation | monitor | custom.",
+      "Types: vault | memory | agent | tool | automation | monitor | system | custom.",
     inputSchema: {
       type: "object",
       properties: {
@@ -39,8 +39,8 @@ export const CHRONICLE_TOOLS: Tool[] = [
   {
     name: "chronicle_list",
     description:
-      "Read the Noel Chronicle event log — your AI OS timeline. Returns recent events in reverse chronological order. " +
-      "Filter by type to see only vault saves, swarm runs, agent activity, etc.",
+      "Read the Noel Chronicle event log - your AI runtime timeline. Returns recent events in reverse chronological order. " +
+      "Filter by type to see only vault saves, agent activity, automations, etc.",
     inputSchema: {
       type: "object",
       properties: {
@@ -58,15 +58,18 @@ export const CHRONICLE_TOOLS: Tool[] = [
   },
 ];
 
+// Keep "swarm" emoji for backward compatibility - legacy chronicle entries
+// may still have this type even though it's no longer accepted on new writes.
 const TYPE_EMOJI: Record<string, string> = {
   vault:       "🗄️",
   memory:      "🧠",
-  swarm:       "🐝",
   agent:       "🤖",
   tool:        "🔧",
   automation:  "⚡",
   monitor:     "👁️",
+  system:      "⚙️",
   custom:      "📌",
+  swarm:       "🐝",
 };
 
 export async function handleChronicle(

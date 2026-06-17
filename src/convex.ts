@@ -47,14 +47,14 @@ export async function callConvex(path: string, method: string, body?: unknown, t
       headers["X-Wallet-Signature"] = signature;
       headers["X-Wallet-Timestamp"] = timestamp;
     } catch {
-      // continue without wallet headers — server will respond with 401/402
+      // continue without wallet headers - server will respond with 401/402
     }
   }
 
   const paymentHeader = process.env.NOELCLAW_PAYMENT_HEADER;
   if (paymentHeader) headers["X-Payment"] = paymentHeader;
 
-  // BYOK headers — user pays for their own AI/service costs
+  // BYOK headers - user pays for their own AI/service costs
   if (process.env.ANTHROPIC_API_KEY) headers["X-User-Anthropic-Key"] = process.env.ANTHROPIC_API_KEY;
   if (process.env.GROK_API_KEY) headers["X-User-Grok-Key"] = process.env.GROK_API_KEY;
   if (process.env.BANKR_API_KEY) headers["X-User-Bankr-Key"] = process.env.BANKR_API_KEY;
@@ -101,6 +101,40 @@ export async function callConvex(path: string, method: string, body?: unknown, t
   }
 
   throw lastError ?? new Error("Request failed after retries");
+}
+
+// Variant that returns the response body as raw text. Used for endpoints
+// that stream non-JSON content like /vault/blob (large vault entries that
+// were offloaded to Convex File Storage).
+export async function callConvexRaw(path: string, toolName = "unknown", timeoutMs = 60_000): Promise<string> {
+  const url = `${CONVEX_SITE}${path}`;
+  const headers: Record<string, string> = {};
+
+  const apiKey       = process.env.NOELCLAW_API_KEY;
+  const sessionToken = getSavedToken();
+  const authHeader   = apiKey
+    ? `Bearer ${apiKey}`
+    : sessionToken
+    ? `Bearer ${sessionToken}`
+    : null;
+  if (authHeader) {
+    headers["Authorization"] = authHeader;
+  } else {
+    try {
+      const { address, signature, timestamp } = await signRequest(toolName);
+      headers["X-Wallet-Address"] = address;
+      headers["X-Wallet-Signature"] = signature;
+      headers["X-Wallet-Timestamp"] = timestamp;
+    } catch {}
+  }
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!res.ok) throw new Error(`Noelclaw API error: ${res.status}`);
+  return res.text();
 }
 
 export async function notifyTelegram(userId: string, message: string): Promise<{ sent: boolean; reason?: string }> {

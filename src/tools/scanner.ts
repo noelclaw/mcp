@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { ToolResult } from "../types.js";
+import { cachedFetch } from "../_http-cache.js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const DEFAULT_MIN_LIQ   = 50_000;
@@ -47,7 +48,7 @@ function scoreDipReversal(c: Candidate, minLiquidity = DEFAULT_MIN_LIQ): ScoreRe
   const totalTxns1h = c.buys1h + c.sells1h;
   const buyRatio1h  = totalTxns1h > 0 ? c.buys1h / totalTxns1h : 0;
 
-  // ── Hard gates — all must pass ────────────────────────────────────────────
+  // ── Hard gates - all must pass ────────────────────────────────────────────
   const gateFailures: string[] = [];
   if (pc1h >= 0)                              gateFailures.push(`1h not negative (${pc1h.toFixed(1)}%)`);
   if (pc5m < 0.5)                             gateFailures.push(`5m bounce weak (${pc5m.toFixed(1)}% < 0.5%)`);
@@ -59,13 +60,13 @@ function scoreDipReversal(c: Candidate, minLiquidity = DEFAULT_MIN_LIQ): ScoreRe
     return { score: 0, passed: false, pattern: null, breakdown: {}, gateFailures, buyPressure5m: buyRatio5m * 100 };
   }
 
-  // ── 1. Drop depth (0–25 pts) — deeper dip = more bounce room ─────────────
+  // ── 1. Drop depth (0–25 pts) - deeper dip = more bounce room ─────────────
   const dropPts = pc1h <= -10 ? 25 : pc1h <= -5 ? 20 : pc1h <= -3 ? 15 : 5;
 
   // ── 2. Bounce confirmation (0–20 pts) ─────────────────────────────────────
   const bouncePts = pc5m >= 5 ? 20 : pc5m >= 3 ? 17 : pc5m >= 2 ? 14 : pc5m >= 1 ? 10 : 5;
 
-  // ── 3. Sentiment shift (0–15 pts) — buyers returning after selloff ────────
+  // ── 3. Sentiment shift (0–15 pts) - buyers returning after selloff ────────
   const sentimentShift = buyRatio5m - buyRatio1h;
   const sentPts = sentimentShift >= 0.10 ? 15
     : sentimentShift >= 0.05 ? 10
@@ -76,13 +77,13 @@ function scoreDipReversal(c: Candidate, minLiquidity = DEFAULT_MIN_LIQ): ScoreRe
   const bp    = buyRatio5m * 100;
   const bpPts = bp >= 65 ? 10 : bp >= 58 ? 8 : bp >= 53 ? 5 : 2;
 
-  // ── 5. Volume & activity (0–15 pts) — validates bounce is real ───────────
+  // ── 5. Volume & activity (0–15 pts) - validates bounce is real ───────────
   const actPts = vol1h >= 100_000 && totalTxns1h >= 200 ? 15
     : vol1h >= 50_000 && totalTxns1h >= 100 ? 12
     : vol1h >= 20_000 && totalTxns1h >= 40  ? 8
     : vol1h >= 5_000  && totalTxns1h >= 10  ? 4 : 1;
 
-  // ── 6. Trend alignment (−10 to +15 pts) — dip in uptrend vs dead cat ─────
+  // ── 6. Trend alignment (−10 to +15 pts) - dip in uptrend vs dead cat ─────
   let trendPts: number;
   if (pc6h > 0 && pc24h > 0)  trendPts = 15;
   else if (pc24h > 0)          trendPts = 10;
@@ -119,10 +120,13 @@ function scoreDipReversal(c: Candidate, minLiquidity = DEFAULT_MIN_LIQ): ScoreRe
 }
 
 // ── Fetch helpers ─────────────────────────────────────────────────────────────
+// All external scanner calls flow through cachedFetch - adds 45s LRU caching
+// + 429 backoff. GeckoTerminal and DexScreener both throttle aggressively;
+// before this, parallel scan_market / score_token calls were tripping limits.
 async function fetchJson(url: string): Promise<any> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+  const res = await cachedFetch(url, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`HTTP ${res.status} from ${new URL(url).hostname}`);
-  return res.json();
+  return JSON.parse(res.text);
 }
 
 async function fetchBasePools(minLiquidity: number, limit: number): Promise<Candidate[]> {
@@ -199,7 +203,7 @@ function scoreMomentum(c: Candidate, minLiquidity = DEFAULT_MIN_LIQ): MomentumRe
   const buyRatio1h  = totalTxns1h > 0 ? c.buys1h / totalTxns1h : 0;
   const bp          = buyRatio5m * 100;
 
-  // Hard gates — all must pass
+  // Hard gates - all must pass
   const gateFailures: string[] = [];
   if (pc1h < 3)                              gateFailures.push(`1h momentum weak (${pc1h.toFixed(1)}% < 3%)`);
   if (pc5m < 0.5)                            gateFailures.push(`5m not accelerating (${pc5m.toFixed(1)}% < 0.5%)`);
@@ -262,7 +266,7 @@ const ScanMomentumSchema = z.object({
 export const SCANNER_TOOLS: Tool[] = [
   {
     name: "score_token",
-    description: "Run the 6-component dip-reversal score on any Base token. Returns a 0–100 score, pattern label (DEEP-REVERSAL / REVERSAL / DIP-BUY / SHALLOW-DIP), and full component breakdown. Data from DexScreener — no API key required.",
+    description: "Run the 6-component dip-reversal score on any Base token. Returns a 0–100 score, pattern label (DEEP-REVERSAL / REVERSAL / DIP-BUY / SHALLOW-DIP), and full component breakdown. Data from DexScreener - no API key required.",
     inputSchema: {
       type: "object",
       properties: {
@@ -288,7 +292,7 @@ export const SCANNER_TOOLS: Tool[] = [
     description:
       "Scan all trending + new Base pools for trading opportunities. Two modes: " +
       "'dips' finds dip-reversal setups (6-component scorer: momentum, buy pressure, depth, volume surge, trend context, volatility). " +
-      "'momentum' finds breakout setups — tokens with strong 1h+ upward momentum still accelerating (gates: 1h > +3%, 5m rising, buy pressure > 55%). " +
+      "'momentum' finds breakout setups - tokens with strong 1h+ upward momentum still accelerating (gates: 1h > +3%, 5m rising, buy pressure > 55%). " +
       "No API keys required.",
     inputSchema: {
       type: "object",
@@ -347,14 +351,14 @@ export async function handleScannerTool(name: string, args: unknown): Promise<To
       `\`${address}\``,
       ``,
       `**Score: ${result.score}/100** \`${bar}\``,
-      `**Pattern:** ${result.pattern ?? "—"}`,
+      `**Pattern:** ${result.pattern ?? "-"}`,
       `**Price:** $${c.priceUsd.toFixed(8).replace(/0+$/, "").replace(/\.$/, "")}`,
       `**Liquidity:** $${(c.liquidity / 1_000).toFixed(0)}k`,
       ``,
     ];
 
     if (!result.passed) {
-      lines.push(`**Gates failed — not a valid dip-reversal setup:**`);
+      lines.push(`**Gates failed - not a valid dip-reversal setup:**`);
       result.gateFailures.forEach(f => lines.push(`• ${f}`));
     } else {
       lines.push(`**Breakdown:**`);
@@ -368,9 +372,9 @@ export async function handleScannerTool(name: string, args: unknown): Promise<To
       lines.push(`| Trend | 6h ${bd.trendAlignment?.pc6h}% / 24h ${bd.trendAlignment?.pc24h}% | ${(bd.trendAlignment?.points ?? 0) > 0 ? "+" : ""}${bd.trendAlignment?.points}/15 |`);
       lines.push(``);
 
-      if (result.score >= 65)     lines.push(`**Strong setup.** Score ≥65 — high probability dip-reversal.`);
-      else if (result.score >= 50) lines.push(`**Marginal.** Score 50–64 — look for additional confirmation before entry.`);
-      else                         lines.push(`**Weak.** Score <50 — skip this setup.`);
+      if (result.score >= 65)     lines.push(`**Strong setup.** Score ≥65 - high probability dip-reversal.`);
+      else if (result.score >= 50) lines.push(`**Marginal.** Score 50–64 - look for additional confirmation before entry.`);
+      else                         lines.push(`**Weak.** Score <50 - skip this setup.`);
 
       lines.push(``, `Run \`check_token address="${address}"\` for a rug/security check before buying.`);
     }
@@ -385,7 +389,7 @@ export async function handleScannerTool(name: string, args: unknown): Promise<To
 
     const { address } = parsed.data;
 
-    // GoPlusLabs — chain 8453 = Base mainnet
+    // GoPlusLabs - chain 8453 = Base mainnet
     const data = await fetchJson(
       `https://api.gopluslabs.io/api/v1/token_security/8453?contract_addresses=${address}`,
     );
@@ -427,10 +431,10 @@ export async function handleScannerTool(name: string, args: unknown): Promise<To
       ``,
       `| Check | Status |`,
       `|-------|--------|`,
-      `| Honeypot | ${isHoneypot   ? "🔴 YES — cannot sell" : "🟢 No"} |`,
-      `| Mint authority | ${isMintable   ? "🔴 Yes — supply can inflate" : "🟢 No"} |`,
-      `| Transfer freeze | ${isFreezeAuth ? "🔴 Yes — transfers can be paused" : "🟢 No"} |`,
-      `| Open source | ${isOpenSource ? "🟢 Yes" : "🔴 No — unverified contract"} |`,
+      `| Honeypot | ${isHoneypot   ? "🔴 YES - cannot sell" : "🟢 No"} |`,
+      `| Mint authority | ${isMintable   ? "🔴 Yes - supply can inflate" : "🟢 No"} |`,
+      `| Transfer freeze | ${isFreezeAuth ? "🔴 Yes - transfers can be paused" : "🟢 No"} |`,
+      `| Open source | ${isOpenSource ? "🟢 Yes" : "🔴 No - unverified contract"} |`,
       `| LP locked | ${lpLockedPct >= 80 ? "🟢" : lpLockedPct >= 50 ? "🟡" : "🔴"} ${lpLockedPct.toFixed(1)}% |`,
       `| Buy tax | ${buyTax > 5 ? "🟡" : "🟢"} ${buyTax}% |`,
       `| Sell tax | ${sellTax > 10 ? "🔴" : sellTax > 5 ? "🟡" : "🟢"} ${sellTax}% |`,
@@ -441,9 +445,9 @@ export async function handleScannerTool(name: string, args: unknown): Promise<To
     if (verdict === "DANGER") {
       lines.push(`**Do not buy.** This token has critical red flags. High risk of total loss.`);
     } else if (verdict === "CAUTION") {
-      lines.push(`**Trade carefully.** Elevated risk — verify team, community, and LP lock before buying. Keep position size small.`);
+      lines.push(`**Trade carefully.** Elevated risk - verify team, community, and LP lock before buying. Keep position size small.`);
     } else {
-      lines.push(`**Passes basic security checks.** No critical red flags found. Always DYOR — security checks are not a guarantee.`);
+      lines.push(`**Passes basic security checks.** No critical red flags found. Always DYOR - security checks are not a guarantee.`);
     }
 
     return { content: [{ type: "text", text: lines.join("\n") }] };
@@ -479,7 +483,7 @@ export async function handleScannerTool(name: string, args: unknown): Promise<To
           content: [{
             type: "text",
             text: [
-              `## Momentum Scan — No Breakouts Found`,
+              `## Momentum Scan - No Breakouts Found`,
               `Scanned **${candidates.length} pools** on Base. None passed the momentum gates with score ≥ ${minScore}.`,
               `When nothing breaks out, the market may be in consolidation. Try \`scan_market mode=dips\` instead.`,
             ].join("\n"),
@@ -488,7 +492,7 @@ export async function handleScannerTool(name: string, args: unknown): Promise<To
       }
 
       const lines = [
-        `## Momentum Scan — ${scored.length} Breakout${scored.length !== 1 ? "s" : ""} Found`,
+        `## Momentum Scan - ${scored.length} Breakout${scored.length !== 1 ? "s" : ""} Found`,
         `Scanned **${candidates.length} pools** · Score ≥ ${minScore} · Liq ≥ $${(minLiquidity / 1000).toFixed(0)}k`,
         ``,
       ];
@@ -518,16 +522,16 @@ export async function handleScannerTool(name: string, args: unknown): Promise<To
         content: [{
           type: "text",
           text: [
-            `## Dip Scan — No Setups Found`,
+            `## Dip Scan - No Setups Found`,
             `Scanned **${candidates.length} pools** on Base. None passed the dip-reversal gates with score ≥ ${minScore}.`,
-            `This is a signal in itself — try \`scan_market mode=momentum\` or check back in 5–10 minutes.`,
+            `This is a signal in itself - try \`scan_market mode=momentum\` or check back in 5–10 minutes.`,
           ].join("\n"),
         }],
       };
     }
 
     const lines = [
-      `## Dip Scan — ${scored.length} Setup${scored.length !== 1 ? "s" : ""} Found`,
+      `## Dip Scan - ${scored.length} Setup${scored.length !== 1 ? "s" : ""} Found`,
       `Scanned **${candidates.length} pools** · Score ≥ ${minScore} · Liq ≥ $${(minLiquidity / 1000).toFixed(0)}k`,
       ``,
     ];

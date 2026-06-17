@@ -21,7 +21,7 @@ export interface LLMOptions {
   /**
    * Provider-specific real-time search. Currently only applied when Grok is
    * the active provider (`provider="grok"` or auto-selected Grok).
-   * For other providers this is silently ignored — the call proceeds normally.
+   * For other providers this is silently ignored - the call proceeds normally.
    */
   liveSearch?: LiveSearchOptions;
   /**
@@ -43,7 +43,7 @@ export function isGrokActive(): boolean {
   const provider = process.env.NOELCLAW_PROVIDER?.toLowerCase().trim();
   if (provider === "grok") return !!process.env.GROK_API_KEY;
   if (provider === "bankr" || provider === "anthropic") return false;
-  // Auto-priority — Grok is only active if it's the only key present
+  // Auto-priority - Grok is only active if it's the only key present
   if (process.env.BANKR_API_KEY || process.env.ANTHROPIC_API_KEY) return false;
   return !!process.env.GROK_API_KEY;
 }
@@ -72,7 +72,7 @@ export async function callLLM(
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const grokKey      = process.env.GROK_API_KEY;
 
-  // Explicit provider override — user picked one
+  // Explicit provider override - user picked one
   if (provider === "grok" && grokKey)           return callGrok(grokKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs, options.liveSearch, options.model);
   if (provider === "anthropic" && anthropicKey) return callAnthropic(anthropicKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs, options.model);
   if (provider === "bankr" && bankrKey)         return callBankr(bankrKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs, options.model);
@@ -82,7 +82,7 @@ export async function callLLM(
   if (anthropicKey) return callAnthropic(anthropicKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs, options.model);
   if (grokKey)      return callGrok(grokKey, systemPrompt, userPrompt, maxTokens, history, timeoutMs, options.liveSearch, options.model);
 
-  // Fallback: route through Convex backend — owner covers cost
+  // Fallback: route through Convex backend - owner covers cost
   return callViaConvex(systemPrompt, userPrompt, history, timeoutMs);
 }
 
@@ -219,11 +219,11 @@ async function callGrok(
     stream: false,
   };
 
-  // xAI Live Search — pulls real-time results from web/X/news/RSS during inference.
+  // xAI Live Search - pulls real-time results from web/X/news/RSS during inference.
   // Docs: https://docs.x.ai/docs/guides/live-search
   // Note: as of late 2026 xAI deprecated this in favor of Agent Tools API
   // (returns 410 Gone). We detect that and retry without search_parameters
-  // so synthesis still succeeds — just without the real-time augmentation.
+  // so synthesis still succeeds - just without the real-time augmentation.
   if (liveSearch) {
     body.search_parameters = {
       mode: liveSearch.mode,
@@ -265,7 +265,7 @@ async function callGrok(
   const content = data.choices?.[0]?.message?.content ?? "";
 
   // When Live Search ran (and was not deprecated), append the citations as a
-  // parsable block at the bottom — downstream consumers (deep_research) can
+  // parsable block at the bottom - downstream consumers (deep_research) can
   // read these and merge into the final source list.
   if (liveSearch && data.citations && data.citations.length > 0) {
     return `${content}\n\n<!--GROK_LIVE_CITATIONS\n${data.citations.join("\n")}\nGROK_LIVE_CITATIONS-->`;

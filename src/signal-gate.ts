@@ -1,5 +1,5 @@
 // Insufficient-signal detector used by deep_research before saving to vault.
-// Mirrors convex/_signalGate.ts in the app — same logic, different runtime.
+// Mirrors convex/_signalGate.ts in the app - same logic, different runtime.
 
 export type SignalCheck = {
   ok: boolean;
@@ -41,7 +41,7 @@ export function checkSignal(content: string): SignalCheck {
     if (lower.includes(phrase)) {
       return {
         ok: false,
-        reason: `search returned only metadata pages — LLM flagged it ("${phrase}")`,
+        reason: `search returned only metadata pages - LLM flagged it ("${phrase}")`,
         score: 0.2,
       };
     }

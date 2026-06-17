@@ -1,6 +1,6 @@
 {
   "name": "@noelclaw/mcp",
-  "version": "3.27.0",
+  "version": "3.29.0",
   "description": "The runtime layer for Agentic AI. 102 MCP tools: persistent memory, autonomous agents, vault storage, and scheduled workflows — works in Claude Code, Cursor, Windsurf, Codex, Aeon, Antigravity, and any MCP-compatible client.",
   "main": "dist/index.js",
   "bin": {

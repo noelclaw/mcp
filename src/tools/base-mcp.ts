@@ -1,9 +1,9 @@
-// Base MCP integration — exposes Base wallet + DeFi capabilities under the
+// Base MCP integration - exposes Base wallet + DeFi capabilities under the
 // `base_mcp_*` namespace, mirroring the surface of Base's official MCP server
 // at https://mcp.base.org but routed through noelclaw's existing infrastructure
 // so users don't need a separate OAuth flow.
 //
-// Each tool below is a thin wrapper around an existing noelclaw tool — the
+// Each tool below is a thin wrapper around an existing noelclaw tool - the
 // value here is the namespacing + Base-specific defaults + basename resolution.
 // Users can call these without knowing about the underlying `get_portfolio`,
 // `send_token`, etc.
@@ -20,27 +20,27 @@ export const BASE_MCP_TOOLS: Tool[] = [
   {
     name: "base_mcp_status",
     description:
-      "Base MCP — get live status of your Base wallet: address, chain info, current ETH price, gas. " +
+      "Base MCP - get live status of your Base wallet: address, chain info, current ETH price, gas. " +
       "Use at the start of any Base session to confirm everything is connected.",
     inputSchema: { type: "object", properties: {}, required: [] },
   },
   {
     name: "base_mcp_balance",
     description:
-      "Base MCP — get your current token balances on Base mainnet (ETH, USDC, USDT, DAI, WETH). " +
+      "Base MCP - get your current token balances on Base mainnet (ETH, USDC, USDT, DAI, WETH). " +
       "Mirrors `get_portfolio` from Base's official MCP server.",
     inputSchema: { type: "object", properties: {}, required: [] },
   },
   {
     name: "base_mcp_send",
     description:
-      "Base MCP — send ETH or ERC-20 tokens to any address (or basename like `jesse.base.eth`) on Base mainnet. " +
+      "Base MCP - send ETH or ERC-20 tokens to any address (or basename like `jesse.base.eth`) on Base mainnet. " +
       "Signed and broadcast locally from your wallet. Resolves basenames automatically.",
     inputSchema: {
       type: "object",
       properties: {
         token: { type: "string", description: "Token symbol: ETH, USDC, USDT, DAI, WETH" },
-        to: { type: "string", description: "Destination — 0x address or Base basename (e.g. jesse.base.eth)" },
+        to: { type: "string", description: "Destination - 0x address or Base basename (e.g. jesse.base.eth)" },
         amount: { type: "string", description: "Human-readable amount, e.g. '0.01' or '50'" },
       },
       required: ["token", "to", "amount"],
@@ -49,7 +49,11 @@ export const BASE_MCP_TOOLS: Tool[] = [
   {
     name: "base_mcp_swap",
     description:
-      "Base MCP — swap tokens on Base via 0x Permit2. Supported: ETH, USDC, USDT, DAI, WETH. " +
+      "Base MCP - swap tokens on Base (chainId 8453) via 0x Protocol Permit2 (signature-based, no separate approval tx). " +
+      "Supported tokens: ETH, USDC, USDT, DAI, WETH. " +
+      "Refuses execution when price impact exceeds maxPriceImpactPct (default 3%). " +
+      "Broadcasts via NOELCLAW_BROADCAST_RPC if set (MEV-protected); otherwise standard Base RPC. " +
+      "Base's centralized sequencer naturally minimizes MEV exposure vs Ethereum L1. " +
       "Use base_mcp_estimate first to preview the rate.",
     inputSchema: {
       type: "object",
@@ -57,6 +61,8 @@ export const BASE_MCP_TOOLS: Tool[] = [
         fromToken: { type: "string", description: "Token to sell: ETH, USDC, USDT, DAI, WETH" },
         toToken: { type: "string", description: "Token to buy: ETH, USDC, USDT, DAI, WETH" },
         amount: { type: "string", description: "Amount or percentage (e.g. '0.001', '50%')" },
+        maxSlippagePct: { type: "number", description: "Max slippage tolerance in % (default 1.0). Passed to 0x router." },
+        maxPriceImpactPct: { type: "number", description: "Hard ceiling on price impact in % (default 3.0). Swap is refused above this." },
       },
       required: ["fromToken", "toToken", "amount"],
     },
@@ -64,7 +70,7 @@ export const BASE_MCP_TOOLS: Tool[] = [
   {
     name: "base_mcp_estimate",
     description:
-      "Base MCP — preview a swap's expected output and price impact without executing. " +
+      "Base MCP - preview a swap's expected output and price impact without executing. " +
       "Always call before base_mcp_swap to confirm the rate.",
     inputSchema: {
       type: "object",
@@ -72,6 +78,8 @@ export const BASE_MCP_TOOLS: Tool[] = [
         fromToken: { type: "string", description: "Token to sell" },
         toToken: { type: "string", description: "Token to buy" },
         amount: { type: "string", description: "Amount to swap" },
+        maxSlippagePct: { type: "number", description: "Max slippage in % to apply when quoting (default 1.0)." },
+        maxPriceImpactPct: { type: "number", description: "Soft ceiling - warns if price impact exceeds this (default 3.0)." },
       },
       required: ["fromToken", "toToken", "amount"],
     },
@@ -79,14 +87,15 @@ export const BASE_MCP_TOOLS: Tool[] = [
   {
     name: "base_mcp_lend",
     description:
-      "Base MCP — find the best lending opportunity for a token on Base (Morpho vaults + Moonwell markets) " +
-      "and prepare a deposit transaction. Returns top yield options ranked by APY × TVL safety score.",
+      "Base MCP - find the best lending venues for a token on Base (Morpho vaults + Moonwell markets), ranked by APY × TVL safety score. " +
+      "Returns deposit INSTRUCTIONS only (which protocol, vault address, expected APY). Does NOT broadcast a deposit transaction. " +
+      "User must deposit manually via the protocol UI.",
     inputSchema: {
       type: "object",
       properties: {
         asset: { type: "string", description: "Asset symbol: USDC, ETH, WETH, etc." },
-        amount: { type: "string", description: "Optional — amount to deposit. If provided, returns a ready-to-sign deposit tx." },
-        venue: { type: "string", description: "Optional — 'morpho' or 'moonwell'. Default: best across both." },
+        amount: { type: "string", description: "Optional - amount to show suggested allocation. Does NOT execute." },
+        venue: { type: "string", description: "Optional - 'morpho' or 'moonwell'. Default: best across both." },
       },
       required: ["asset"],
     },
@@ -94,7 +103,7 @@ export const BASE_MCP_TOOLS: Tool[] = [
   {
     name: "base_mcp_resolve",
     description:
-      "Base MCP — resolve a Base basename (like `jesse.base.eth`) to its 0x address. " +
+      "Base MCP - resolve a Base basename (like `jesse.base.eth`) to its 0x address. " +
       "Uses Coinbase's basename resolver. Reverse-resolves addresses to names too.",
     inputSchema: {
       type: "object",
@@ -104,25 +113,11 @@ export const BASE_MCP_TOOLS: Tool[] = [
       required: ["name"],
     },
   },
-  {
-    name: "base_mcp_analyze",
-    description:
-      "Base MCP — analyze any wallet's Base activity: holdings, top tokens, recent activity, behavioral profile. " +
-      "Works on any public 0x address. Useful before copying trades or auditing protocols.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        address: { type: "string", description: "Address (0x...) or basename to analyze" },
-        label: { type: "string", description: "Optional label for context" },
-      },
-      required: ["address"],
-    },
-  },
 ];
 
 // ── Direct Base RPC balance fetch ──────────────────────────────────────────
 // Bypasses backend `/mcp/defi/portfolio` (currently throws RPC errors for
-// empty wallets) — talks straight to Coinbase's public Base RPC.
+// empty wallets) - talks straight to Coinbase's public Base RPC.
 
 const BASE_RPC = "https://mainnet.base.org";
 
@@ -192,13 +187,13 @@ async function fetchBaseBalances(address: string): Promise<string> {
   return lines.join("\n");
 }
 
-// ── Basename resolution (Web3.bio — supports basenames + ENS) ────────────────
+// ── Basename resolution (Web3.bio - supports basenames + ENS) ────────────────
 
 async function resolveBasename(input: string): Promise<{ address?: string; name?: string; error?: string }> {
   const trimmed = input.trim();
   const isAddress = /^0x[a-fA-F0-9]{40}$/.test(trimmed);
 
-  // Forward lookup (basename → address) — Web3.bio basenames namespace
+  // Forward lookup (basename → address) - Web3.bio basenames namespace
   if (!isAddress) {
     const looksLikeName = trimmed.endsWith(".base.eth") || trimmed.endsWith(".base");
     if (!looksLikeName) {
@@ -222,7 +217,7 @@ async function resolveBasename(input: string): Promise<{ address?: string; name?
     }
   }
 
-  // Reverse lookup (address → basename) — Web3.bio supports multi-namespace
+  // Reverse lookup (address → basename) - Web3.bio supports multi-namespace
   try {
     const res = await fetch(
       `https://api.web3.bio/profile/basenames/${trimmed.toLowerCase()}`,
@@ -233,7 +228,7 @@ async function resolveBasename(input: string): Promise<{ address?: string; name?
       const name = data?.identity ?? data?.displayName ?? null;
       if (name && name.endsWith(".base.eth")) return { address: trimmed, name };
     }
-    // No basename — that's fine, return address with no name
+    // No basename - that's fine, return address with no name
     return { address: trimmed };
   } catch {
     return { address: trimmed };
@@ -258,7 +253,7 @@ export async function handleBaseMcpTool(name: string, args: unknown): Promise<To
         content: [{
           type: "text",
           text: [
-            "## 🔵 Base MCP — Status",
+            "## 🔵 Base MCP - Status",
             "",
             "**Wallet**:",
             walletText,
@@ -281,7 +276,7 @@ export async function handleBaseMcpTool(name: string, args: unknown): Promise<To
         return { content: [{ type: "text", text: "Wallet not configured. Run noelclaw login first." }], isError: true };
       }
       const body = await fetchBaseBalances(addrMatch[0]);
-      return { content: [{ type: "text", text: `## 🔵 Base MCP — Balance\n\n${body}` }] };
+      return { content: [{ type: "text", text: `## 🔵 Base MCP - Balance\n\n${body}` }] };
     }
 
     case "base_mcp_send": {
@@ -304,11 +299,23 @@ export async function handleBaseMcpTool(name: string, args: unknown): Promise<To
     }
 
     case "base_mcp_swap": {
-      return handleDefiTool("swap_tokens", { fromToken: a.fromToken, toToken: a.toToken, amount: a.amount });
+      return handleDefiTool("swap_tokens", {
+        fromToken: a.fromToken,
+        toToken: a.toToken,
+        amount: a.amount,
+        maxSlippagePct: a.maxSlippagePct,
+        maxPriceImpactPct: a.maxPriceImpactPct,
+      });
     }
 
     case "base_mcp_estimate": {
-      return handleDefiTool("estimate_swap", { fromToken: a.fromToken, toToken: a.toToken, amount: a.amount });
+      return handleDefiTool("estimate_swap", {
+        fromToken: a.fromToken,
+        toToken: a.toToken,
+        amount: a.amount,
+        maxSlippagePct: a.maxSlippagePct,
+        maxPriceImpactPct: a.maxPriceImpactPct,
+      });
     }
 
     case "base_mcp_lend": {
@@ -318,7 +325,7 @@ export async function handleBaseMcpTool(name: string, args: unknown): Promise<To
       }
       const venue = (a.venue ?? "").toString().toLowerCase();
 
-      // Two parallel lookups — Morpho vaults + Moonwell markets — unless venue specified
+      // Two parallel lookups - Morpho vaults + Moonwell markets - unless venue specified
       const promises: Array<Promise<ToolResult | null>> = [];
       if (venue !== "moonwell") promises.push(handleBaseTool("base_query_vaults", { asset }));
       if (venue !== "morpho") promises.push(handleBaseTool("base_list_markets", { asset }));
@@ -330,7 +337,7 @@ export async function handleBaseMcpTool(name: string, args: unknown): Promise<To
         .filter(Boolean);
 
       const lines = [
-        `## 🔵 Base MCP — Lend ${asset}`,
+        `## 🔵 Base MCP - Lend ${asset}`,
         "",
         ...blocks,
       ];
@@ -356,7 +363,7 @@ export async function handleBaseMcpTool(name: string, args: unknown): Promise<To
       if (result.error) {
         return { content: [{ type: "text", text: `❌ ${result.error}` }], isError: true };
       }
-      const lines = ["## 🔵 Base MCP — Resolve", ""];
+      const lines = ["## 🔵 Base MCP - Resolve", ""];
       if (result.name) lines.push(`**Basename**: \`${result.name}\``);
       if (result.address) lines.push(`**Address**: \`${result.address}\``);
       if (!result.name && result.address) lines.push(`_No reverse basename registered for this address._`);

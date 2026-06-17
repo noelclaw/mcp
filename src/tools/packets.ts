@@ -6,7 +6,7 @@ export const PACKET_TOOLS: Tool[] = [
   {
     name: "packet_create",
     description:
-      "Create or update a Packet — a named, reusable AI workflow stored in your vault. " +
+      "Create or update a Packet - a named, reusable AI workflow stored in your vault. " +
       "A Packet is a sequence of steps (tool calls or prompts) that can be run later or shared. " +
       "Example: a 'daily-research' packet that runs web_search → ask_noel → vault_save each morning. " +
       "Steps can be tool calls with explicit args, or natural language prompts for the AI to interpret. " +
@@ -50,7 +50,7 @@ export const PACKET_TOOLS: Tool[] = [
     name: "packet_run",
     description:
       "Load and execute a Packet by name. Returns all steps formatted for sequential execution. " +
-      "After calling this, execute each step in order — tool steps are called directly, prompt steps are interpreted as instructions.",
+      "After calling this, execute each step in order - tool steps are called directly, prompt steps are interpreted as instructions.",
     inputSchema: {
       type: "object",
       properties: {
@@ -64,7 +64,7 @@ export const PACKET_TOOLS: Tool[] = [
   },
   {
     name: "packet_list",
-    description: "List all your Packets — reusable workflows stored in vault. Shows name, description, step count, and whether it's shared.",
+    description: "List all your Packets - reusable workflows stored in vault. Shows name, description, step count, and whether it's shared.",
     inputSchema: {
       type: "object",
       properties: {
@@ -152,7 +152,7 @@ export async function handlePacket(
       "packet_run",
     );
 
-    if (!data?.entry) {
+    if (!data?.content || data?.error) {
       return {
         content: [{ type: "text", text: `Packet \`${name}\` not found. Use \`packet_list\` to see available packets.` }],
         isError: true,
@@ -161,7 +161,7 @@ export async function handlePacket(
 
     let packet: { name: string; description: string; steps: Array<{ step: number; description: string; tool?: string; args?: Record<string, unknown>; prompt?: string }> };
     try {
-      packet = JSON.parse(data.entry.content);
+      packet = JSON.parse(data.content);
     } catch {
       return {
         content: [{ type: "text", text: `Packet \`${name}\` has invalid content.` }],

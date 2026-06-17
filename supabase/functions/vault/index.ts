@@ -71,7 +71,7 @@ async function resolveAuth(
   request: Request,
   toolName: string,
 ): Promise<{ userId: string } | Response> {
-  // 1. API key — long-lived, safe for CI/CD secrets
+  // 1. API key - long-lived, safe for CI/CD secrets
   const authHeader = request.headers.get("Authorization");
   if (authHeader?.startsWith("Bearer noel_")) {
     const raw = authHeader.slice(7);
@@ -89,7 +89,7 @@ async function resolveAuth(
     return { userId: data.user_id ?? data.wallet };
   }
 
-  // 2. Wallet signature — interactive use (browser / one-time setup)
+  // 2. Wallet signature - interactive use (browser / one-time setup)
   const walletAddress = request.headers.get("X-Wallet-Address");
   const walletSignature = request.headers.get("X-Wallet-Signature");
   const walletTimestamp = request.headers.get("X-Wallet-Timestamp");
@@ -111,7 +111,7 @@ async function resolveAuth(
     }
   }
 
-  return json({ error: "Authentication required — use Bearer API key or wallet signature headers" }, 401);
+  return json({ error: "Authentication required - use Bearer API key or wallet signature headers" }, 401);
 }
 
 // ─── Key management ───────────────────────────────────────────────────────────
@@ -140,7 +140,7 @@ async function handleKeyGenerate(request: Request): Promise<Response> {
     key: rawKey,
     wallet: userId,
     label,
-    message: "Save this key — it will not be shown again.",
+    message: "Save this key - it will not be shown again.",
   });
 }
 
@@ -638,7 +638,7 @@ async function handleSearch(request: Request): Promise<Response> {
 
     const { data: fallbackResults } = await fallbackQuery;
 
-    // Merge and deduplicate — ft results first
+    // Merge and deduplicate - ft results first
     const seen = new Set<string>();
     const merged = [...(ftResults ?? []), ...(fallbackResults ?? [])].filter((e) => {
       if (seen.has(e.key)) return false;

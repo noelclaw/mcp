@@ -8,6 +8,7 @@ const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
 interface NoelConfig {
   sessionToken?: string;
   email?: string;
+  name?: string;
 }
 
 export function readConfig(): NoelConfig {

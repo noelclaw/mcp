@@ -4,7 +4,7 @@ import type { ToolResult } from "./types.js";
 
 const NOELCLAW_TOKEN = "0x4B524015D54a27d4472F5c59c570730D69499Ba3";
 const BALANCE_SELECTOR = "0x70a08231"; // balanceOf(address)
-const CACHE_TTL = 5 * 60 * 1000;      // 5 min — avoid per-call RPC
+const CACHE_TTL = 5 * 60 * 1000;      // 5 min - avoid per-call RPC
 
 // 1 NOELCLAW (18 decimals). Override via NOELCLAW_MIN_BALANCE env var.
 const MIN_BALANCE = BigInt(process.env.NOELCLAW_MIN_BALANCE ?? "1000000000000000000");
@@ -44,15 +44,13 @@ export async function getTier(): Promise<Tier> {
     _cache = { tier, at: Date.now() };
     return tier;
   } catch {
-    // RPC unreachable — don't block, degrade gracefully
+    // RPC unreachable - don't block, degrade gracefully
     return "basic";
   }
 }
 
 // Tools that require NOELCLAW token to unlock
 export const PREMIUM_TOOLS = new Set<string>([
-  // Multi-agent swarm
-  "swarm_research", "trigger_agent", "swarm_synthesize", "stop_swarm", "get_swarm_status",
   // Simulation
   "miroshark_simulate", "miroshark_status", "miroshark_stop",
   // AI analysis
@@ -76,13 +74,13 @@ export function tokenGateError(toolName: string): ToolResult {
         "",
         `\`${toolName}\` requires a Noelclaw account or NOELCLAW token.`,
         "",
-        "**Option 1 — Sign in (easiest):**",
+        "**Option 1 - Sign in (easiest):**",
         "1. Go to noelclaw.com and sign in",
         "2. Copy your session token from Settings",
         "3. Add to your MCP config: `NOELCLAW_SESSION_TOKEN=noel_...`",
         "",
-        "**Option 2 — Hold NOELCLAW token on Base:**",
-        "1. Get NOELCLAW  —  CA: `0x4B524015D54a27d4472F5c59c570730D69499Ba3`",
+        "**Option 2 - Hold NOELCLAW token on Base:**",
+        "1. Get NOELCLAW  -  CA: `0x4B524015D54a27d4472F5c59c570730D69499Ba3`",
         "2. Hold at least 1 NOELCLAW in your local wallet",
         "3. Access unlocks automatically",
         "",

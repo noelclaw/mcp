@@ -6,18 +6,17 @@ export const FRAMEWORK_TOOLS: Tool[] = [
   {
     name: "list_playbooks",
     description:
-      "List available Noel Framework playbooks — predefined multi-step agent workflows. " +
+      "List available Noel Framework playbooks - predefined multi-step workflows. " +
       "Includes 4 system playbooks (Daily Market Scan, DCA Setup, Portfolio Rebalance Check, " +
-      "Swarm Intel Sweep) plus any you've created. Each step is Sentinel-gated.",
+      "Research Sweep) plus any you've created. Each step is Sentinel-gated.",
     inputSchema: { type: "object", properties: {}, required: [] },
   },
   {
     name: "run_playbook",
     description:
       "Execute a Noel Framework playbook. Each step runs through Sentinel before the " +
-      "appropriate swarm agent executes it (Scout → market-monitor, Tinker → workflow-executor, " +
-      "Skeptic → risk-verifier, Memory → memory-manager). " +
-      "Playbook halts immediately if Sentinel blocks a step.",
+      "matching tool executes it. Steps map directly to noelclaw tools (market, vault, agent, " +
+      "memory, automation). Playbook halts immediately if Sentinel blocks a step.",
     inputSchema: {
       type: "object",
       properties: {
@@ -36,7 +35,7 @@ export const FRAMEWORK_TOOLS: Tool[] = [
   {
     name: "get_noel_ledger",
     description:
-      "Get the Noel Framework audit trail — every Sentinel gate decision " +
+      "Get the Noel Framework audit trail - every Sentinel gate decision " +
       "(approved / blocked / warned), which checks ran, duration, and reason. " +
       "Full transparency on what agents are and aren't allowed to do.",
     inputSchema: { type: "object", properties: {}, required: [] },
@@ -59,7 +58,7 @@ export async function handleFrameworkTool(name: string, args: unknown): Promise<
           const steps = (() => {
             try { return JSON.parse(p.steps).length; } catch { return "?"; }
           })();
-          return `• **${p.name}**${p.isPublic ? " 🌐" : " 👤"} — ${steps} steps\n  ${p.description}\n  Used ${p.usageCount} times`;
+          return `• **${p.name}**${p.isPublic ? " 🌐" : " 👤"} - ${steps} steps\n  ${p.description}\n  Used ${p.usageCount} times`;
         })
         .join("\n\n");
       return { content: [{ type: "text", text: `**Available Playbooks**\n\n${list}` }] };
@@ -115,7 +114,7 @@ export async function handleFrameworkTool(name: string, args: unknown): Promise<
       const steps: any[] = result.results ?? [];
       const succeeded = steps.filter(r => r.success).length;
       const stepLines = steps.map((r: any) =>
-        `${r.success ? "✅" : "❌"} Step ${r.step} [${r.role}]: ${r.tool}${r.error ? ` — ${r.error}` : ""}`,
+        `${r.success ? "✅" : "❌"} Step ${r.step} [${r.role}]: ${r.tool}${r.error ? ` - ${r.error}` : ""}`,
       );
 
       return {

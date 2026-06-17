@@ -9,7 +9,7 @@ export const MIROSHARK_TOOLS: Tool[] = [
   {
     name: "miroshark_simulate",
     description:
-      "Simulate any scenario using MiroShark multi-agent AI. Use this when the user asks to simulate, model, or explore 'what happens if' — market crashes, regulations, social events, macro changes. " +
+      "Simulate any scenario using MiroShark multi-agent AI. Use this when the user asks to simulate, model, or explore 'what happens if' - market crashes, regulations, social events, macro changes. " +
       "AI agents act as traders, analysts, journalists, and social actors. Returns a simulation_id to track progress.",
     inputSchema: {
       type: "object",
@@ -76,7 +76,7 @@ async function miroJson(path: string, method: string, body?: unknown, timeoutMs 
 }
 
 async function miroForm(path: string, form: FormData, timeoutMs = 120_000): Promise<any> {
-  // No Content-Type header — browser/fetch sets multipart boundary automatically
+  // No Content-Type header - browser/fetch sets multipart boundary automatically
   const res = await fetch(`${CONVEX_SITE}${path}`, {
     method: "POST",
     headers: authHeaders(),
@@ -122,7 +122,22 @@ export async function handleMirosharkTool(name: string, args: unknown): Promise<
 
     try {
       // Step 1: convert plain-English question into a structured seed document
-      const asked = await miroJson("/miroshark/api/simulation/ask", "POST", { question: a.scenario });
+      let asked: any;
+      try {
+        asked = await miroJson("/miroshark/api/simulation/ask", "POST", { question: a.scenario });
+      } catch (err: any) {
+        const msg = err.message ?? "";
+        if (msg.includes("[404]") || msg.includes("[503]") || msg.includes("Upstream unreachable") || msg.includes("[502]")) {
+          return {
+            content: [{
+              type: "text",
+              text: "MiroShark simulation service is currently unavailable. The backend may be redeploying — try again in a few minutes. If this persists, the MIROSHARK_URL Cloudflare secret may need to be updated (`wrangler secret put MIROSHARK_URL`).",
+            }],
+            isError: true,
+          };
+        }
+        throw err;
+      }
       const { title, seed_document, simulation_requirement } = asked;
 
       // Step 2: generate knowledge-graph ontology from the seed document
@@ -151,7 +166,7 @@ export async function handleMirosharkTool(name: string, args: unknown): Promise<
       const simId: string = created.simulation_id ?? created.id;
       if (!simId) throw new Error("No simulation_id in create response");
 
-      // Step 6: kick off agent preparation (async — don't block)
+      // Step 6: kick off agent preparation (async - don't block)
       const prepared = await miroJson("/miroshark/api/simulation/prepare", "POST", { simulation_id: simId, parallel_profile_count: 10 });
       const prepTaskId: string | undefined = prepared.task_id;
 
@@ -205,7 +220,7 @@ export async function handleMirosharkTool(name: string, args: unknown): Promise<
         ).catch(() => null);
 
         if (!config) {
-          // Preparation still in progress — check profiles for real-time progress
+          // Preparation still in progress - check profiles for real-time progress
           const profiles = await miroJson(
             `/miroshark/api/simulation/${simId}/profiles/realtime`,
             "GET",
@@ -218,7 +233,7 @@ export async function handleMirosharkTool(name: string, args: unknown): Promise<
             content: [{
               type: "text",
               text: [
-                `**MiroShark \`${simId}\`** — preparing agents`,
+                `**MiroShark \`${simId}\`** - preparing agents`,
                 total !== "?" ? `Profiles: ${ready} / ${total} ready` : `Profiles generating...`,
                 ``,
                 `Poll again in ~10 seconds.`,
@@ -236,7 +251,7 @@ export async function handleMirosharkTool(name: string, args: unknown): Promise<
           content: [{
             type: "text",
             text: [
-              `**MiroShark \`${simId}\`** — simulation started`,
+              `**MiroShark \`${simId}\`** - simulation started`,
               ``,
               `Agents are now active. Poll again in ~15 seconds for progress.`,
               `\`miroshark_status simulation_id="${simId}"\``,
@@ -255,11 +270,11 @@ export async function handleMirosharkTool(name: string, args: unknown): Promise<
           content: [{
             type: "text",
             text: [
-              `**MiroShark \`${simId}\`** — running`,
+              `**MiroShark \`${simId}\`** - running`,
               `Round: ${round} / ${total} (${pct}%)`,
               `Actions: ${twitterActs} Twitter · ${redditActs} Reddit`,
               ``,
-              `Simulation in progress — poll again in ~15 seconds.`,
+              `Simulation in progress - poll again in ~15 seconds.`,
             ].join("\n"),
           }],
         };
@@ -301,12 +316,12 @@ export async function handleMirosharkTool(name: string, args: unknown): Promise<
 
           try {
             brief = await callLLM(
-              "You are a market intelligence analyst. Given a MiroShark multi-agent simulation log, extract: 1) Key market sentiment, 2) Dominant narrative, 3) Top 3 agent behaviors, 4) Outlook. Be concise and direct — max 150 words.",
+              "You are a market intelligence analyst. Given a MiroShark multi-agent simulation log, extract: 1) Key market sentiment, 2) Dominant narrative, 3) Top 3 agent behaviors, 4) Outlook. Be concise and direct - max 150 words.",
               `Simulation activity log:\n${activitySummary}`,
               400,
             );
           } catch {
-            // brief stays empty — non-critical
+            // brief stays empty - non-critical
           }
         }
 
@@ -330,7 +345,7 @@ export async function handleMirosharkTool(name: string, args: unknown): Promise<
         }
 
         const lines = [
-          `**MiroShark \`${simId}\`** — ${runnerStatus}`,
+          `**MiroShark \`${simId}\`** - ${runnerStatus}`,
           `Rounds: ${rounds} · Actions: ${totalActions} agents`,
           "",
         ];
@@ -356,7 +371,7 @@ export async function handleMirosharkTool(name: string, args: unknown): Promise<
         content: [{
           type: "text",
           text: [
-            `**MiroShark \`${simId}\`** — status: ${runnerStatus || "unknown"}`,
+            `**MiroShark \`${simId}\`** - status: ${runnerStatus || "unknown"}`,
             ``,
             `If agents are still preparing, poll again shortly.`,
           ].filter(Boolean).join("\n"),

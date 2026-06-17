@@ -5,13 +5,27 @@ import * as os from "os";
 import * as path from "path";
 import { runAgent } from "./agent-loop.js";
 import { ALL_TOOLS } from "./server.js";
+import { filterTools } from "./tool-filter.js";
 import { writeConfig, readConfig } from "./config.js";
 import type { ChatMessage } from "./llm.js";
 
+// Derived tool counts - single source of truth, kept in sync with the
+// actual registered tools. Updates here propagate to banner, login,
+// and doctor without manual edits.
+const TOTAL_TOOL_COUNT = ALL_TOOLS.length;
+const CORE_TOOL_COUNT = (() => {
+  const prev = process.env.NOELCLAW_TOOLS;
+  try {
+    process.env.NOELCLAW_TOOLS = "core";
+    return filterTools(ALL_TOOLS).length;
+  } finally {
+    if (prev === undefined) delete process.env.NOELCLAW_TOOLS;
+    else process.env.NOELCLAW_TOOLS = prev;
+  }
+})();
+
 const CONVEX_SITE = process.env.NOELCLAW_CONVEX_URL ?? "https://api.noelclaw.com";
 
-// Read version from package.json so the banner stays accurate without manual
-// edits on every release. CJS so __dirname is available.
 const PKG_VERSION: string = (() => {
   try {
     const raw = fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8");
@@ -20,6 +34,21 @@ const PKG_VERSION: string = (() => {
     return "unknown";
   }
 })();
+
+// Read wallet address from the encrypted JSON without decrypting -
+// ethers stores the address in plaintext inside the keystore file.
+function getLocalWalletAddress(): string | null {
+  try {
+    const walletPath = path.join(os.homedir(), ".noelclaw", "wallet.json");
+    if (!fs.existsSync(walletPath)) return null;
+    const data = JSON.parse(fs.readFileSync(walletPath, "utf8"));
+    const addr: string | undefined = data.address;
+    if (!addr) return null;
+    return addr.startsWith("0x") ? addr : `0x${addr}`;
+  } catch {
+    return null;
+  }
+}
 
 async function loginWithOtp(rl: readline.Interface): Promise<void> {
   const ask = (q: string) => new Promise<string>(resolve => rl.question(q, resolve));
@@ -54,9 +83,11 @@ async function loginWithOtp(rl: readline.Interface): Promise<void> {
     return;
   }
 
-  writeConfig({ sessionToken: data.token, email });
-  console.log(`  ${C.green}✓ Logged in as ${email}${C.reset}`);
-  console.log(`  ${C.dim}Token saved to ~/.noelclaw/config.json — all 110 tools unlocked.${C.reset}\n`);
+  // OTP response nests user info under data.user
+  const resolvedEmail: string = data.user?.email ?? email;
+  const name: string | undefined = data.user?.displayName ?? data.user?.firstName ?? undefined;
+  writeConfig({ sessionToken: data.token, email: resolvedEmail, name });
+  printLoginSuccess({ email: resolvedEmail, name });
 }
 
 async function loginWithApiKey(rl: readline.Interface): Promise<void> {
@@ -78,9 +109,10 @@ async function loginWithApiKey(rl: readline.Interface): Promise<void> {
     return;
   }
 
-  writeConfig({ sessionToken: data.token, email: data.email ?? "api-key-user" });
-  console.log(`  ${C.green}✓ Authenticated${data.email ? ` as ${data.email}` : ""}${C.reset}`);
-  console.log(`  ${C.dim}Token saved to ~/.noelclaw/config.json — all 110 tools unlocked.${C.reset}\n`);
+  const email: string = data.email ?? "api-key-user";
+  const name: string | undefined = data.displayName ?? undefined;
+  writeConfig({ sessionToken: data.token, email, name });
+  printLoginSuccess({ email, name });
 }
 
 async function loginFlow(): Promise<void> {
@@ -116,18 +148,85 @@ const C = {
   bg:     "\x1b[48;5;17m",
 };
 
-const BANNER = `
-${C.cyan}${C.bold}  ███╗   ██╗ ██████╗ ███████╗██╗      ██████╗██╗      █████╗ ██╗    ██╗${C.reset}
-${C.cyan}${C.bold}  ████╗  ██║██╔═══██╗██╔════╝██║     ██╔════╝██║     ██╔══██╗██║    ██║${C.reset}
-${C.cyan}${C.bold}  ██╔██╗ ██║██║   ██║█████╗  ██║     ██║     ██║     ███████║██║ █╗ ██║${C.reset}
-${C.cyan}${C.bold}  ██║╚██╗██║██║   ██║██╔══╝  ██║     ██║     ██║     ██╔══██║██║███╗██║${C.reset}
-${C.cyan}${C.bold}  ██║ ╚████║╚██████╔╝███████╗███████╗╚██████╗███████╗██║  ██║╚███╔███╔╝${C.reset}
-${C.cyan}${C.bold}  ╚═╝  ╚═══╝ ╚═════╝ ╚══════╝╚══════╝ ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝${C.reset}
+// ── Banner ────────────────────────────────────────────────────────────────────
+//
+//   ███╗   ██╗ ██████╗ ███████╗██╗      ██████╗██╗      █████╗ ██╗    ██╗
+//   ████╗  ██║██╔═══██╗██╔════╝██║     ██╔════╝██║     ██╔══██╗██║    ██║
+//   ██╔██╗ ██║██║   ██║█████╗  ██║     ██║     ██║     ███████║██║ █╗ ██║
+//   ██║╚██╗██║██║   ██║██╔══╝  ██║     ██║     ██║     ██╔══██║██║███╗██║
+//   ██║ ╚████║╚██████╔╝███████╗███████╗╚██████╗███████╗██║  ██║╚███╔███╔╝
+//   ╚═╝  ╚═══╝ ╚═════╝ ╚══════╝╚══════╝ ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝
 
-  ${C.dim}v${PKG_VERSION}  ·  110 tools  ·  persistent AI OS  ·  noelclaw.com${C.reset}
-  ${C.dim}────────────────────────────────────────────────────────────${C.reset}
-  ${C.dim}Type anything. /help for commands. Ctrl+C to exit.${C.reset}
-`;
+const LOGO_LINES = [
+  `  ███╗   ██╗ ██████╗ ███████╗██╗      ██████╗██╗      █████╗ ██╗    ██╗`,
+  `  ████╗  ██║██╔═══██╗██╔════╝██║     ██╔════╝██║     ██╔══██╗██║    ██║`,
+  `  ██╔██╗ ██║██║   ██║█████╗  ██║     ██║     ██║     ███████║██║ █╗ ██║`,
+  `  ██║╚██╗██║██║   ██║██╔══╝  ██║     ██║     ██║     ██╔══██║██║███╗██║`,
+  `  ██║ ╚████║╚██████╔╝███████╗███████╗╚██████╗███████╗██║  ██║╚███╔███╔╝`,
+  `  ╚═╝  ╚═══╝ ╚═════╝ ╚══════╝╚══════╝ ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝`,
+];
+
+const SEP = `  ${"─".repeat(70)}`;
+
+function buildBanner(): string {
+  const cfg = readConfig();
+  const walletAddr = getLocalWalletAddress();
+  const provider = process.env.BANKR_API_KEY ? "Bankr"
+    : process.env.ANTHROPIC_API_KEY ? "Anthropic"
+    : "Noelclaw proxy";
+
+  const logo = LOGO_LINES.map(l => `${C.cyan}${C.bold}${l}${C.reset}`).join("\n");
+
+  // ── meta row ──
+  const meta = `\n${SEP}\n  ${C.dim}v${PKG_VERSION}  ·  ${TOTAL_TOOL_COUNT} tools  ·  noelclaw.com${C.reset}\n${SEP}`;
+
+  // ── auth block ──
+  let authBlock: string;
+  if (cfg.sessionToken) {
+    const displayName = cfg.name ? `${C.white}${C.bold}${cfg.name}${C.reset}` : "";
+    const displayEmail = cfg.email ? `${C.dim}${cfg.email}${C.reset}` : "";
+    const nameLine = displayName
+      ? `  ${C.green}●${C.reset}  ${displayName}  ${displayEmail}`
+      : `  ${C.green}●${C.reset}  ${displayEmail || `${C.green}Signed in${C.reset}`}`;
+    const walletLine = walletAddr
+      ? `     ${C.dim}Wallet${C.reset}  ${C.cyan}${walletAddr.slice(0, 6)}...${walletAddr.slice(-4)}${C.reset}  ${C.dim}· Base mainnet · keys never leave your machine${C.reset}`
+      : `     ${C.dim}Wallet  not created yet · auto-creates on first DeFi call${C.reset}`;
+    const llmLine = `     ${C.dim}LLM     ${C.reset}${C.green}${provider}${C.reset}  ${C.dim}· ${TOTAL_TOOL_COUNT} tools active${C.reset}`;
+    authBlock = `\n${nameLine}\n${walletLine}\n${llmLine}`;
+  } else {
+    authBlock = [
+      ``,
+      `  ${C.yellow}○${C.reset}  ${C.yellow}Not signed in${C.reset}  ${C.dim}- tools that need your account will fail${C.reset}`,
+      `     ${C.dim}Run ${C.reset}${C.cyan}/login${C.reset}${C.dim} to unlock all ${TOTAL_TOOL_COUNT} tools${C.reset}`,
+      `     ${C.dim}LLM  ${provider}  · basic tools still work${C.reset}`,
+    ].join("\n");
+  }
+
+  const hint = `\n${SEP}\n  ${C.dim}Type anything to chat · /help · Ctrl+C to exit${C.reset}\n`;
+
+  return `\n${logo}\n${meta}\n${authBlock}\n${hint}`;
+}
+
+// ── Post-login success block ──────────────────────────────────────────────────
+function printLoginSuccess({ email, name }: { email: string; name?: string }): void {
+  const walletAddr = getLocalWalletAddress();
+  const displayName = name ?? "";
+
+  console.log(`\n${SEP}`);
+  if (displayName) {
+    console.log(`  ${C.green}✓${C.reset}  ${C.white}${C.bold}${displayName}${C.reset}  ${C.dim}${email}${C.reset}`);
+  } else {
+    console.log(`  ${C.green}✓${C.reset}  ${C.green}${C.bold}Signed in${C.reset}  ${C.dim}as ${email}${C.reset}`);
+  }
+  if (walletAddr) {
+    console.log(`     ${C.dim}Wallet${C.reset}  ${C.cyan}${walletAddr.slice(0, 6)}...${walletAddr.slice(-4)}${C.reset}  ${C.dim}· Base mainnet${C.reset}`);
+  } else {
+    console.log(`     ${C.dim}Wallet  auto-creates on first DeFi tool call${C.reset}`);
+  }
+  console.log(`     ${C.dim}Token saved to ~/.noelclaw/config.json${C.reset}`);
+  console.log(`     ${C.dim}All ${TOTAL_TOOL_COUNT} tools unlocked${C.reset}`);
+  console.log(`${SEP}\n`);
+}
 
 // ── Spinner ───────────────────────────────────────────────────────────────────
 function spinner(label: string): () => void {
@@ -145,42 +244,56 @@ function spinner(label: string): () => void {
 
 // ── Help ─────────────────────────────────────────────────────────────────────
 function printHelp() {
+  const cfg = readConfig();
+  const authLine = cfg.email
+    ? `  ${C.dim}Signed in as ${C.reset}${C.green}${cfg.email}${C.reset}`
+    : `  ${C.yellow}⚠${C.reset}  ${C.dim}Not signed in - run /login to unlock all tools${C.reset}`;
+
   console.log(`
   ${C.cyan}Commands:${C.reset}
-    /login     Sign in to unlock all tools
+    /login     Sign in to unlock all ${TOTAL_TOOL_COUNT} tools
     /logout    Sign out and clear saved token
     /clear     Clear conversation history
     /tools     List all available tools
     /quit      Exit
+
+${authLine}
 
   ${C.dim}Examples:
     remember that I prefer concise answers
     search the web for recent AI news
     save a note to my vault
     research "top AI agent frameworks in 2025"
-    send me a weekly digest every Monday${C.reset}
+    spawn an agent to monitor competitor releases weekly${C.reset}
 `);
+}
+
+// ── Version check ─────────────────────────────────────────────────────────────
+async function checkForUpdate(): Promise<void> {
+  try {
+    const res = await fetch("https://registry.npmjs.org/@noelclaw/mcp/latest", {
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!res.ok) return;
+    const data = await res.json() as { version?: string };
+    const latest = data.version;
+    if (!latest || latest === PKG_VERSION) return;
+    const sep = `  ${"─".repeat(58)}`;
+    console.log(`\n${sep}`);
+    console.log(`  ${C.yellow}⚠${C.reset}  Update available: ${C.yellow}v${PKG_VERSION}${C.reset} → ${C.cyan}v${latest}${C.reset}`);
+    console.log(`     ${C.dim}npx @noelclaw/mcp@latest${C.reset}  ${C.dim}or restart your MCP client${C.reset}`);
+    console.log(`${sep}\n`);
+  } catch {
+    // silently ignore
+  }
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
-  process.stdout.write(BANNER);
+  process.stdout.write(buildBanner());
 
-  // Detect active LLM
-  const mode = process.env.BANKR_API_KEY
-    ? `${C.green}Bankr${C.reset} ${C.dim}(full tool use)${C.reset}`
-    : process.env.ANTHROPIC_API_KEY
-    ? `${C.green}Anthropic${C.reset} ${C.dim}(full tool use)${C.reset}`
-    : `${C.green}Noelclaw${C.reset} ${C.dim}(full tool use · auto-wallet)${C.reset}`;
-
-  console.log(`  ${C.dim}Mode:${C.reset} ${mode}`);
-
-  const cfg = readConfig();
-  if (cfg.email) {
-    console.log(`  ${C.dim}Signed in as:${C.reset} ${C.green}${cfg.email}${C.reset} ${C.dim}· all tools unlocked${C.reset}\n`);
-  } else {
-    console.log(`  ${C.dim}Not signed in. Run${C.reset} ${C.cyan}/login${C.reset} ${C.dim}to unlock all 110 tools.${C.reset}\n`);
-  }
+  // Check for updates in background - shows after banner, doesn't block prompt
+  checkForUpdate().catch(() => {});
 
   const history: ChatMessage[] = [];
 
@@ -356,7 +469,7 @@ function resolveClients(): McpClient[] {
 
 const NOELCLAW_ENTRY = {
   command: "npx",
-  args: ["-y", "@noelclaw/mcp"],
+  args: ["-y", "@noelclaw/mcp@latest"],
   env: {} as Record<string, string>,
 };
 
@@ -433,11 +546,214 @@ async function installFlow(): Promise<void> {
 
   const cfg = readConfig();
   if (!cfg.sessionToken) {
-    console.log(`\n  ${C.dim}Next step — sign in to unlock all tools:${C.reset}`);
+    console.log(`\n  ${C.dim}Next step - sign in to unlock all tools:${C.reset}`);
     console.log(`  ${C.cyan}  noelclaw login${C.reset}\n`);
   } else {
     console.log(`\n  ${C.dim}Already signed in as ${cfg.email ?? "user"}.${C.reset}`);
     console.log(`  ${C.dim}Open your MCP client and start using Noelclaw.${C.reset}\n`);
+  }
+}
+
+// ── doctor - comprehensive health check ──────────────────────────────────────
+// Detects broken installs and missing config in <5s. Output is concise,
+// scannable, and tells the user exactly what to fix next. Designed to be
+// the first command a new user runs after install.
+
+type DoctorCheck = { name: string; status: "✓" | "✗" | "⚠"; detail: string; fix?: string };
+
+async function doctorFlow(): Promise<void> {
+  console.log(`\n  ${C.cyan}${C.bold}noelclaw doctor${C.reset}  ${C.dim}v${PKG_VERSION}${C.reset}\n`);
+  console.log(`  ${C.dim}Running diagnostic - this takes ~5 seconds.${C.reset}\n`);
+
+  const checks: DoctorCheck[] = [];
+  const cfg = readConfig();
+  const authHeader = cfg.sessionToken ? { Authorization: `Bearer ${cfg.sessionToken}` } : {};
+
+  // 1. LLM provider
+  const provider = process.env.BANKR_API_KEY ? "bankr"
+    : process.env.ANTHROPIC_API_KEY ? "anthropic"
+    : "noelclaw-proxy";
+  checks.push({
+    name: "LLM provider",
+    status: "✓",
+    detail: provider === "noelclaw-proxy"
+      ? `noelclaw proxy (no own key set) · all ${TOTAL_TOOL_COUNT} tools usable`
+      : `${provider} (direct, full tool use unlocked)`,
+    fix: provider === "noelclaw-proxy"
+      ? `Set BANKR_API_KEY for faster + cheaper LLM calls`
+      : undefined,
+  });
+
+  // 2. Backend reachable
+  try {
+    const t0 = Date.now();
+    const res = await fetch(`${CONVEX_SITE}/memory/profile`, {
+      headers: authHeader as any,
+      signal: AbortSignal.timeout(8000),
+    });
+    const latency = Date.now() - t0;
+    if (res.status === 401) {
+      checks.push({
+        name: "Backend reachable", status: "⚠",
+        detail: `${CONVEX_SITE} → 401 (not signed in)`,
+        fix: `Run \`noelclaw login\` to authenticate.`,
+      });
+    } else if (res.ok) {
+      checks.push({
+        name: "Backend reachable", status: "✓",
+        detail: `${CONVEX_SITE} → ${res.status} (${latency}ms)`,
+      });
+    } else {
+      checks.push({
+        name: "Backend reachable", status: "✗",
+        detail: `${CONVEX_SITE} → ${res.status}`,
+        fix: `Check NOELCLAW_CONVEX_URL env var, or wait if the service is down.`,
+      });
+    }
+  } catch (err: any) {
+    checks.push({
+      name: "Backend reachable", status: "✗",
+      detail: `${CONVEX_SITE} → ${err.message}`,
+      fix: `Network issue or wrong URL. Default: https://api.noelclaw.com`,
+    });
+  }
+
+  // 3. Auth state
+  if (cfg.sessionToken) {
+    checks.push({
+      name: "Authentication",
+      status: "✓",
+      detail: cfg.email
+        ? `Signed in as ${cfg.email}`
+        : `Session token present`,
+    });
+  } else {
+    checks.push({
+      name: "Authentication",
+      status: "⚠",
+      detail: `No session token - running with local wallet signature only`,
+      fix: `Run \`noelclaw login\` for persistent identity across MCP clients.`,
+    });
+  }
+
+  // 4. Local wallet
+  const walletPath = path.join(os.homedir(), ".noelclaw", "wallet.json");
+  if (fs.existsSync(walletPath)) {
+    try {
+      const wallet = JSON.parse(fs.readFileSync(walletPath, "utf8"));
+      const addr = wallet.address ? (wallet.address.startsWith("0x") ? wallet.address : `0x${wallet.address}`) : "unknown";
+      checks.push({
+        name: "Local wallet", status: "✓",
+        detail: `${addr.slice(0, 6)}...${addr.slice(-4)} at ~/.noelclaw/wallet.json`,
+      });
+    } catch {
+      checks.push({
+        name: "Local wallet", status: "⚠",
+        detail: `wallet.json present but unreadable`,
+        fix: `Delete ~/.noelclaw/wallet.json and re-run noelclaw - new wallet auto-creates.`,
+      });
+    }
+  } else {
+    checks.push({
+      name: "Local wallet", status: "⚠",
+      detail: `Not created yet`,
+      fix: `Auto-creates on first DeFi tool call (base_mcp_balance, etc).`,
+    });
+  }
+
+  // 5. Profile entries
+  if (cfg.sessionToken) {
+    try {
+      const res = await fetch(`${CONVEX_SITE}/vault/profile-context?maxChars=100`, {
+        headers: authHeader as any,
+        signal: AbortSignal.timeout(6000),
+      });
+      const data = await res.json() as any;
+      if (data?.hasProfile) {
+        checks.push({
+          name: "Profile context", status: "✓",
+          detail: `Profile entries found - Claude auto-loads your context across sessions`,
+        });
+      } else {
+        checks.push({
+          name: "Profile context", status: "⚠",
+          detail: `No profile entries yet`,
+          fix: `Run: vault_save type=memory key=profile/business content="<who you are, what you build>"`,
+        });
+      }
+    } catch {
+      checks.push({
+        name: "Profile context", status: "⚠",
+        detail: `Could not fetch (backend issue)`,
+      });
+    }
+  }
+
+  // 6. Tool palette mode
+  const toolMode = process.env.NOELCLAW_TOOLS ?? "core";
+  checks.push({
+    name: "Tool palette",
+    status: "✓",
+    detail: `Mode: ${toolMode}${toolMode === "core" ? ` (default - ${CORE_TOOL_COUNT} essential tools)` : toolMode === "all" ? ` (power user - ${TOTAL_TOOL_COUNT} tools)` : ` (custom subset)`}`,
+    fix: toolMode === "core"
+      ? `Set NOELCLAW_TOOLS=all to expose all ${TOTAL_TOOL_COUNT} tools (raises LLM context cost).`
+      : undefined,
+  });
+
+  // 7. MEV-protect broadcast (optional belt-and-suspenders for swaps)
+  if (process.env.NOELCLAW_BROADCAST_RPC) {
+    const host = (() => {
+      try { return new URL(process.env.NOELCLAW_BROADCAST_RPC!).host; } catch { return "custom"; }
+    })();
+    checks.push({
+      name: "MEV-protect", status: "✓",
+      detail: `Broadcasts routed through ${host} (private/MEV-protected)`,
+    });
+  } else {
+    checks.push({
+      name: "MEV-protect", status: "⚠",
+      detail: `Standard Base RPC (sequencer is centralized, MEV is naturally low)`,
+      fix: `Optional: set NOELCLAW_BROADCAST_RPC=<private-relay-url> for belt-and-suspenders routing.`,
+    });
+  }
+
+  // 8. GITHUB_TOKEN (optional but affects github_search_code)
+  if (process.env.GITHUB_TOKEN) {
+    checks.push({
+      name: "GitHub token", status: "✓",
+      detail: `GITHUB_TOKEN set - github_search_code + private repos work`,
+    });
+  } else {
+    checks.push({
+      name: "GitHub token", status: "⚠",
+      detail: `No GITHUB_TOKEN - github_search_code disabled, other tools rate-limited to 60/hr`,
+      fix: `Optional. Create at https://github.com/settings/tokens (scopes: public_repo) and add to MCP env.`,
+    });
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  const colorFor = (s: DoctorCheck["status"]) => s === "✓" ? C.green : s === "⚠" ? C.yellow : C.red;
+  const widest = Math.max(...checks.map((c) => c.name.length));
+
+  for (const c of checks) {
+    const pad = c.name.padEnd(widest);
+    console.log(`  ${colorFor(c.status)}${c.status}${C.reset}  ${C.cyan}${pad}${C.reset}  ${c.detail}`);
+    if (c.fix) console.log(`     ${" ".repeat(widest)}  ${C.dim}→ ${c.fix}${C.reset}`);
+  }
+
+  const counts = { "✓": 0, "⚠": 0, "✗": 0 };
+  checks.forEach((c) => counts[c.status]++);
+  console.log("");
+  console.log(`  ${C.dim}Summary:${C.reset} ${C.green}${counts["✓"]} ok${C.reset} · ${C.yellow}${counts["⚠"]} warning${C.reset} · ${C.red}${counts["✗"]} critical${C.reset}`);
+  console.log("");
+
+  if (counts["✗"] > 0) {
+    console.log(`  ${C.red}Critical issues found - fix the lines above before relying on noelclaw.${C.reset}\n`);
+    process.exit(1);
+  } else if (counts["⚠"] > 0) {
+    console.log(`  ${C.dim}Warnings are non-blocking - noelclaw works but could be smoother.${C.reset}\n`);
+  } else {
+    console.log(`  ${C.green}All systems healthy.${C.reset}\n`);
   }
 }
 
@@ -454,17 +770,57 @@ if (cmd === "install") {
     console.error(`  ${C.red}✗ login error: ${err.message}${C.reset}`);
     process.exit(1);
   });
+} else if (cmd === "doctor") {
+  doctorFlow().catch((err) => {
+    console.error(`  ${C.red}✗ doctor error: ${err.message}${C.reset}`);
+    process.exit(1);
+  });
+} else if (cmd === "logout") {
+  const cfg = readConfig();
+  if (!cfg.sessionToken) {
+    console.log(`\n  ${C.dim}Already signed out.${C.reset}\n`);
+  } else {
+    writeConfig({ sessionToken: undefined, email: undefined });
+    console.log(`\n  ${C.green}✓${C.reset} Signed out${cfg.email ? ` (${cfg.email})` : ""}. Token cleared from ~/.noelclaw/config.json\n`);
+  }
+} else if (cmd === "status") {
+  const cfg = readConfig();
+  const walletAddr = getLocalWalletAddress();
+  const provider = process.env.BANKR_API_KEY ? "Bankr"
+    : process.env.ANTHROPIC_API_KEY ? "Anthropic"
+    : "Noelclaw proxy";
+  const SEP_S = `  ${"─".repeat(52)}`;
+  console.log(`\n${SEP_S}`);
+  if (cfg.sessionToken) {
+    const displayName = cfg.name ? `${C.white}${C.bold}${cfg.name}${C.reset}  ` : "";
+    const displayEmail = cfg.email ? `${C.dim}${cfg.email}${C.reset}` : "";
+    console.log(`  ${C.green}●${C.reset}  ${displayName}${displayEmail}`);
+    if (walletAddr) {
+      console.log(`     ${C.dim}Wallet  ${C.reset}${C.cyan}${walletAddr.slice(0, 6)}...${walletAddr.slice(-4)}${C.reset}  ${C.dim}· Base mainnet${C.reset}`);
+    } else {
+      console.log(`     ${C.dim}Wallet  not created yet${C.reset}`);
+    }
+    console.log(`     ${C.dim}LLM     ${C.reset}${C.green}${provider}${C.reset}  ${C.dim}· ${TOTAL_TOOL_COUNT} tools · v${PKG_VERSION}${C.reset}`);
+  } else {
+    console.log(`  ${C.yellow}○${C.reset}  ${C.yellow}Not signed in${C.reset}`);
+    console.log(`     ${C.dim}→ run \`noelclaw login\` to unlock all ${TOTAL_TOOL_COUNT} tools${C.reset}`);
+    console.log(`     ${C.dim}LLM  ${provider}  · v${PKG_VERSION}${C.reset}`);
+  }
+  console.log(`${SEP_S}\n`);
 } else if (cmd === "help" || cmd === "--help" || cmd === "-h") {
   console.log(`
-  ${C.cyan}${C.bold}noelclaw${C.reset}  ${C.dim}AI OS for your terminal${C.reset}
+  ${C.cyan}${C.bold}noelclaw${C.reset}  ${C.dim}runtime layer for Agentic AI · terminal CLI${C.reset}
 
   ${C.cyan}Commands:${C.reset}
     noelclaw              Start interactive AI terminal
     noelclaw install      Auto-configure all detected MCP clients
     noelclaw login        Sign in to unlock all tools
+    noelclaw logout       Sign out and clear saved token
+    noelclaw status       Show auth state and version (quick check)
+    noelclaw doctor       Run a full health check + suggest fixes
     noelclaw help         Show this help
 
-  ${C.dim}Claude Desktop / Cursor / Windsurf / VS Code are all supported.${C.reset}
+  ${C.dim}Claude Code / Cursor / Windsurf / Codex / Aeon / Antigravity / Zed — anywhere MCP runs.${C.reset}
 `);
 } else {
   main().catch(err => {

@@ -9,7 +9,7 @@
 // (DefiLlama for TVL/yields, CoinGecko for prices), and pre-inject those
 // numbers into the synthesis context as authoritative ground truth.
 //
-// Free public APIs — no keys needed.
+// Free public APIs - no keys needed.
 
 export type EnrichmentBlock = {
   /** Markdown block to inject into the synthesis prompt before the LLM writes */
@@ -58,7 +58,7 @@ function extractMatches(query: string, list: readonly string[]): string[] {
   return list.filter((item) => q.includes(item));
 }
 
-/** Fetch DefiLlama protocol data — returns top-N protocols by TVL with slug match. */
+/** Fetch DefiLlama protocol data - returns top-N protocols by TVL with slug match. */
 async function fetchDefiLlamaProtocol(name: string): Promise<any | null> {
   try {
     const slug = name.toLowerCase().replace(/\s+/g, "-");
@@ -85,7 +85,7 @@ async function fetchDefiLlamaProtocol(name: string): Promise<any | null> {
   }
 }
 
-/** Fetch DefiLlama yields — top vaults filtered by chain + token. */
+/** Fetch DefiLlama yields - top vaults filtered by chain + token. */
 async function fetchDefiLlamaYields(token?: string, chain?: string): Promise<any[] | null> {
   try {
     const res = await fetch("https://yields.llama.fi/pools", {
@@ -103,7 +103,7 @@ async function fetchDefiLlamaYields(token?: string, chain?: string): Promise<any
       const tk = token.toLowerCase();
       pools = pools.filter((p) => (p.symbol ?? "").toLowerCase().includes(tk));
     }
-    // Filter spam — only show meaningful TVL ($1M+) and non-extreme APY
+    // Filter spam - only show meaningful TVL ($1M+) and non-extreme APY
     pools = pools.filter((p) => (p.tvlUsd ?? 0) > 1_000_000 && (p.apy ?? 0) < 100);
     return pools.sort((a, b) => (b.tvlUsd ?? 0) - (a.tvlUsd ?? 0)).slice(0, 10);
   } catch {
@@ -144,7 +144,7 @@ function formatUsd(n: number | null | undefined): string {
 }
 
 /**
- * Main entry — call before the synthesis stage. Returns an enrichment block
+ * Main entry - call before the synthesis stage. Returns an enrichment block
  * to splice into the prompt. Pure best-effort: if APIs are down or query
  * isn't crypto, returns hasData=false and the synthesis runs as normal.
  */
@@ -172,7 +172,7 @@ export async function enrichCryptoQuery(query: string): Promise<EnrichmentBlock>
             .join(" · ")
         : "";
       blocks.push([
-        `### 📊 DefiLlama (live) — ${proto.name}`,
+        `### 📊 DefiLlama (live) - ${proto.name}`,
         ``,
         `- **Total TVL**: ${formatUsd(proto.tvl)}`,
         proto.change_1d != null ? `- **24h Δ**: ${proto.change_1d.toFixed(2)}%` : "",
@@ -186,7 +186,7 @@ export async function enrichCryptoQuery(query: string): Promise<EnrichmentBlock>
     }
   }
 
-  // ── Yield/vault data — when query mentions yield/vault/apy on a chain ──
+  // ── Yield/vault data - when query mentions yield/vault/apy on a chain ──
   const yieldKeywords = ["yield", "vault", "apy", "lp"];
   const wantsYields = yieldKeywords.some((k) => query.toLowerCase().includes(k));
   if (wantsYields) {
@@ -234,7 +234,7 @@ export async function enrichCryptoQuery(query: string): Promise<EnrichmentBlock>
     `---`,
     `## 🔒 AUTHORITATIVE LIVE DATA`,
     ``,
-    `The following numbers are pulled directly from primary APIs at query time. Treat these as ground truth — prefer these figures over any conflicting numbers from scraped web pages. Cite them as \`[DefiLlama]\` or \`[CoinGecko]\` in your report.`,
+    `The following numbers are pulled directly from primary APIs at query time. Treat these as ground truth - prefer these figures over any conflicting numbers from scraped web pages. Cite them as \`[DefiLlama]\` or \`[CoinGecko]\` in your report.`,
     ``,
     ...blocks,
     `---`,

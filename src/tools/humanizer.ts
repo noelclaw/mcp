@@ -3,6 +3,14 @@ import { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { callLLM } from "../llm.js";
 import { ToolResult } from "../types.js";
 
+// Voice quality matters more than reasoning depth here - pin a model that's
+// good at tone matching and natural prose. Falls through the standard
+// NOELCLAW_MODEL chain when unset so existing setups still work.
+const HUMANIZER_MODEL_OPTIONS = (): { model?: string } => {
+  const m = process.env.NOELCLAW_HUMANIZER_MODEL;
+  return m ? { model: m } : {};
+};
+
 export const HUMANIZER_TOOLS: Tool[] = [
   {
     name: "write_content",
@@ -10,13 +18,13 @@ export const HUMANIZER_TOOLS: Tool[] = [
       "Write viral-style crypto/tech content for Twitter/X. " +
       "Two formats: 'thread' returns a numbered multi-tweet thread (1/, 2/, ...) with hook + insights + closer. " +
       "'post' returns a single punchy post under 280 chars (or 500 with long=true). " +
-      "No AI tells, no fluff — direct practitioner voice. Optionally match your writing style with a voice sample.",
+      "No AI tells, no fluff - direct practitioner voice. Optionally match your writing style with a voice sample.",
     inputSchema: {
       type: "object",
       properties: {
         topic: {
           type: "string",
-          description: "What to write about — a thought, alpha, market insight, or narrative",
+          description: "What to write about - a thought, alpha, market insight, or narrative",
         },
         format: {
           type: "string",
@@ -47,7 +55,7 @@ export const HUMANIZER_TOOLS: Tool[] = [
   {
     name: "humanize_text",
     description:
-      "Remove AI writing patterns from text — makes it sound natural, direct, and human. " +
+      "Remove AI writing patterns from text - makes it sound natural, direct, and human. " +
       "Fixes 29 common AI tells: significance inflation, em dash overuse, filler phrases, " +
       "sycophantic openers, passive voice, elegant variation, chatbot artifacts, and more. " +
       "Optionally provide a writing sample to match your personal voice.",
@@ -80,9 +88,12 @@ const WriteThreadSchema = z.object({
   voice_sample: z.string().max(5_000).optional(),
 });
 
+// `tone` is the canonical field name across both formats - matches the
+// JSON schema exposed in HUMANIZER_TOOLS. Earlier versions used `style`
+// here, which silently dropped any `tone: ...` the user passed.
 const WritePostSchema = z.object({
   topic:        z.string().min(3).max(500),
-  style:        z.enum(["hook", "hot-take", "alpha", "question", "observation"]).optional(),
+  tone:         z.enum(["hook", "hot-take", "alpha", "question", "observation"]).optional(),
   long:         z.boolean().optional(),
   voice_sample: z.string().max(5_000).optional(),
 });
@@ -90,58 +101,58 @@ const WritePostSchema = z.object({
 
 const HUMANIZER_SYSTEM = `You are a text editor that removes signs of AI-generated writing.
 
-Your job: rewrite the input so it sounds natural, direct, and human — without changing the meaning.
+Your job: rewrite the input so it sounds natural, direct, and human - without changing the meaning.
 
 Fix these patterns when present:
 
 CONTENT
-1. Significance inflation — remove phrases like "in today's rapidly evolving landscape", "in an era of", "now more than ever"
-2. Notability emphasis — cut "notably", "it is worth noting", "it is important to note"
-3. Superficial -ing openers — rewrite "By leveraging X, you can Y" → just say "X lets you Y"
-4. Promotional language — cut "revolutionary", "game-changing", "cutting-edge", "innovative solution"
-5. Vague attribution — replace "experts say", "studies show" with specific sources or cut entirely
-6. Formulaic challenges sections — remove "Of course, challenges remain" boilerplate
+1. Significance inflation - remove phrases like "in today's rapidly evolving landscape", "in an era of", "now more than ever"
+2. Notability emphasis - cut "notably", "it is worth noting", "it is important to note"
+3. Superficial -ing openers - rewrite "By leveraging X, you can Y" → just say "X lets you Y"
+4. Promotional language - cut "revolutionary", "game-changing", "cutting-edge", "innovative solution"
+5. Vague attribution - replace "experts say", "studies show" with specific sources or cut entirely
+6. Formulaic challenges sections - remove "Of course, challenges remain" boilerplate
 
 LANGUAGE
-7. AI vocabulary — replace: landscape → field/market/space, pivotal → key/critical, testament → proof/sign, delve → explore/look at, utilize → use, leverage → use
-8. Copula avoidance — "serves as", "stands as", "acts as" → just use "is"
-9. Negative parallelisms — "not only X but also Y" → just say the thing directly
-10. Rule of three — "fast, reliable, and scalable" padding — cut to what matters
-11. Elegant variation — don't use synonyms to avoid repeating a word; repeat it or restructure
-12. False ranges — "anywhere from X to Y" → just say the number you know
-13. Passive voice — rewrite to active where it feels evasive
-14. Em dash overuse — max one per paragraph; replace others with commas or rewrite
-15. Bullet point padding — remove bullets that just restate the intro sentence
+7. AI vocabulary - replace: landscape → field/market/space, pivotal → key/critical, testament → proof/sign, delve → explore/look at, utilize → use, leverage → use
+8. Copula avoidance - "serves as", "stands as", "acts as" → just use "is"
+9. Negative parallelisms - "not only X but also Y" → just say the thing directly
+10. Rule of three - "fast, reliable, and scalable" padding - cut to what matters
+11. Elegant variation - don't use synonyms to avoid repeating a word; repeat it or restructure
+12. False ranges - "anywhere from X to Y" → just say the number you know
+13. Passive voice - rewrite to active where it feels evasive
+14. Em dash overuse - max one per paragraph; replace others with commas or rewrite
+15. Bullet point padding - remove bullets that just restate the intro sentence
 
 COMMUNICATION
-16. Chatbot artifacts — cut "Certainly!", "Of course!", "Great question!", "I hope this helps"
-17. Knowledge disclaimers — cut "As of my last update", "Based on my training data"
-18. Sycophancy — cut "That's a fascinating perspective", "You raise an excellent point"
+16. Chatbot artifacts - cut "Certainly!", "Of course!", "Great question!", "I hope this helps"
+17. Knowledge disclaimers - cut "As of my last update", "Based on my training data"
+18. Sycophancy - cut "That's a fascinating perspective", "You raise an excellent point"
 
 FILLER
-19. Filler phrases — cut "It is worth mentioning that", "It goes without saying", "Needless to say"
-20. Excessive hedging — cut "it could be argued", "one might say", "in some ways"
-21. Generic conclusions — rewrite "In conclusion, X is important" → just end on substance
-22. Hyphenated padding — "user-friendly", "game-changing", "thought-provoking" → be specific
-23. Signposting — cut "In this article, I will explain" — just explain it
-24. Fragmented headers — avoid turning every sentence into a bold header
+19. Filler phrases - cut "It is worth mentioning that", "It goes without saying", "Needless to say"
+20. Excessive hedging - cut "it could be argued", "one might say", "in some ways"
+21. Generic conclusions - rewrite "In conclusion, X is important" → just end on substance
+22. Hyphenated padding - "user-friendly", "game-changing", "thought-provoking" → be specific
+23. Signposting - cut "In this article, I will explain" - just explain it
+24. Fragmented headers - avoid turning every sentence into a bold header
 
 PROCESS:
 1. Read the full text
 2. Identify which patterns are present
-3. Rewrite — fix all patterns found
+3. Rewrite - fix all patterns found
 4. Self-audit: scan the rewrite for any remaining AI tells
 5. Final revision if needed
-6. Output ONLY the final humanized text — no commentary, no explanation, no "Here is your text:"
+6. Output ONLY the final humanized text - no commentary, no explanation, no "Here is your text:"
 
 If a voice sample is provided, match its tone, rhythm, and vocabulary. Otherwise use direct, opinionated, natural prose.`;
 
 const THREAD_SYSTEM = `You are a crypto Twitter ghostwriter who writes threads that go viral. Your style: direct, no fluff, confident without being cringe. You understand DeFi, on-chain data, narratives, and market structure. You write like a smart practitioner, not a content creator.
 
 Rules:
-- First tweet is the hook — bold claim or surprising insight. Must make people stop scrolling.
+- First tweet is the hook - bold claim or surprising insight. Must make people stop scrolling.
 - Middle tweets: each one standalone insight. No "in this thread I'll explain" filler.
-- Last tweet: the payoff. Strong closer, optional CTA (follow, RT, reply) — one CTA max.
+- Last tweet: the payoff. Strong closer, optional CTA (follow, RT, reply) - one CTA max.
 - Number format: 1/ 2/ 3/ etc. Each tweet on its own line, separated by blank line.
 - Under 280 chars per tweet unless it genuinely needs more (max 500).
 - No em dashes, no "delve", no "landscape", no "it's worth noting".
@@ -175,16 +186,16 @@ export async function handleHumanizerTool(name: string, args: unknown): Promise<
       const prompt = [
         `Write a ${tweets}-tweet Twitter/X thread on: ${topic}`,
         ``,
-        `Tone: ${toneKey} — ${toneGuides[toneKey]}`,
+        `Tone: ${toneKey} - ${toneGuides[toneKey]}`,
         voice_sample ? `Voice sample (match this style):\n${voice_sample}` : "",
         ``,
         `Format: number each tweet as 1/ 2/ 3/ etc., separated by blank lines.`,
         `First tweet = hook. Last tweet = strong closer.`,
-        `Output only the tweets — no intro, no explanation.`,
+        `Output only the tweets - no intro, no explanation.`,
       ].filter(Boolean).join("\n");
 
       try {
-        const output = await callLLM(THREAD_SYSTEM, prompt, 2000);
+        const output = await callLLM(THREAD_SYSTEM, prompt, 2000, [], 60_000, HUMANIZER_MODEL_OPTIONS());
         return { content: [{ type: "text", text: output.trim() }] };
       } catch (err: any) {
         return { content: [{ type: "text", text: `write_content error: ${err.message}` }], isError: true };
@@ -194,7 +205,7 @@ export async function handleHumanizerTool(name: string, args: unknown): Promise<
     // format === "post"
     const parsed = WritePostSchema.safeParse(args);
     if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${parsed.error.issues[0].message}` }], isError: true };
-    const { style = "hook", long = false } = parsed.data;
+    const { tone = "hook", long = false } = parsed.data;
 
     const styleGuides: Record<string, string> = {
       hook:        "Strong first line that stops the scroll. Deliver the insight after.",
@@ -203,7 +214,7 @@ export async function handleHumanizerTool(name: string, args: unknown): Promise<
       question:    "Ask a sharp, thought-provoking question. Don't answer it.",
       observation: "One specific thing you noticed that most people missed.",
     };
-    const styleKey = Object.keys(styleGuides).includes(style) ? style : "hook";
+    const styleKey = Object.keys(styleGuides).includes(tone) ? tone : "hook";
     const charLimit = long ? 500 : 280;
 
     const prompt = [
@@ -211,11 +222,11 @@ export async function handleHumanizerTool(name: string, args: unknown): Promise<
       `Style: ${styleGuides[styleKey]}`,
       `Max length: ${charLimit} characters.`,
       voice_sample ? `Voice sample:\n${voice_sample}` : "",
-      `Output only the post text — nothing else.`,
+      `Output only the post text - nothing else.`,
     ].filter(Boolean).join("\n");
 
     try {
-      const output = await callLLM(POST_SYSTEM, prompt, 300);
+      const output = await callLLM(POST_SYSTEM, prompt, 300, [], 60_000, HUMANIZER_MODEL_OPTIONS());
       return { content: [{ type: "text", text: output.trim() }] };
     } catch (err: any) {
       return { content: [{ type: "text", text: `write_content error: ${err.message}` }], isError: true };
@@ -236,7 +247,7 @@ export async function handleHumanizerTool(name: string, args: unknown): Promise<
     : text;
 
   try {
-    const output = await callLLM(HUMANIZER_SYSTEM, userMsg, 4096);
+    const output = await callLLM(HUMANIZER_SYSTEM, userMsg, 4096, [], 60_000, HUMANIZER_MODEL_OPTIONS());
     if (!output) return { content: [{ type: "text", text: "Empty response from model" }], isError: true };
     return { content: [{ type: "text", text: output.trim() }] };
   } catch (err: any) {

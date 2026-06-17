@@ -10,22 +10,13 @@ export const RESEARCH_COMPARE_TOOLS: Tool[] = [
   {
     name: "research_compare",
     description:
-      "Compare two research reports from your vault and generate a structured diff " +
-      "showing what changed: new findings, updated positions, weakened claims, and " +
-      "the net direction. Auto-saves the comparison to vault as type:research and " +
-      "auto-links to both source reports. " +
-      "Use cases: see how your understanding of a market/company/topic evolved over " +
-      "time, compare your research against a publicly available report, diff a " +
-      "deep_research run before/after a major event (earnings, launch, news). " +
-      "This is what 'cumulative research' looks like in practice — your knowledge " +
-      "base doesn't just grow, it gets queryable across time. " +
-      "Cost: 1 LLM call + 2 vault reads. Takes 30-60s.",
+      "Diff two vault research reports. Returns a structured comparison: new findings, updated positions, weakened claims, net direction. Auto-saves the comparison as type:research and auto-links to both source reports. 1 LLM call + 2 vault reads, ~30-60s.",
     inputSchema: {
       type: "object",
       properties: {
         keyA: {
           type: "string",
-          description: "Vault key of the FIRST (older / baseline) report. Format: 'research/...' — use vault_list type:research to find candidates.",
+          description: "Vault key of the FIRST (older / baseline) report. Format: 'research/...' - use vault_list type:research to find candidates.",
         },
         keyB: {
           type: "string",
@@ -88,17 +79,17 @@ async function synthesizeComparison(
     ? `\n\nFOCUS THE COMPARISON ON: ${focus}. Down-weight other aspects.`
     : "";
 
-  const sys = `You are a senior analyst writing a structured comparison report between two research documents. The user wants to see what changed in their understanding — not a side-by-side rehash of both reports.
+  const sys = `You are a senior analyst writing a structured comparison report between two research documents. The user wants to see what changed in their understanding - not a side-by-side rehash of both reports.
 
 OUTPUT FORMAT (strict Markdown sections, in this order):
 
-# {topic} — Evolution from {dateA} to {dateB}
+# {topic} - Evolution from {dateA} to {dateB}
 
 ## TL;DR
 2-3 sentences capturing what changed. Lead with the most important shift. No filler.
 
 ## Net Direction
-One-line assessment: **STRENGTHENED** / **WEAKENED** / **PIVOTED** / **REFINED** — then 1-2 sentences explaining why.
+One-line assessment: **STRENGTHENED** / **WEAKENED** / **PIVOTED** / **REFINED** - then 1-2 sentences explaining why.
 
 ## At a Glance
 A Markdown table with these EXACT columns:
@@ -108,42 +99,42 @@ A Markdown table with these EXACT columns:
 Fill 5-8 rows with the most important quantitative or qualitative shifts. Use ↑/↓/→/⚡/❓ symbols in the Change column.
 
 ## 🆕 New in B (not in A)
-- 3-6 bullets — findings, entities, data points, or angles that appear in B but were absent from A.
+- 3-6 bullets - findings, entities, data points, or angles that appear in B but were absent from A.
 
 ## 🔄 Updated (changed since A)
-- 3-6 bullets — claims that exist in both reports but with different positions, numbers, sentiment, or confidence.
+- 3-6 bullets - claims that exist in both reports but with different positions, numbers, sentiment, or confidence.
 - Format: "{Claim}: was {A's position}, now {B's position}"
 
 ## ⚠️ Weakened or Removed
-- 2-4 bullets — claims from A that B no longer makes, contradicts, or has lower confidence on.
-- These are the "what we got wrong" or "what the data revised" moments. Don't skip — flagging weakened claims is honest reporting.
+- 2-4 bullets - claims from A that B no longer makes, contradicts, or has lower confidence on.
+- These are the "what we got wrong" or "what the data revised" moments. Don't skip - flagging weakened claims is honest reporting.
 
 ## Confidence Shift
 Brief paragraph: did the overall confidence go up or down? Are the sources stronger now? Are the predictions more grounded?
 
 ## What to Watch Next
-3-4 forward-looking questions that emerged from this comparison — things to revisit in the next iteration.
+3-4 forward-looking questions that emerged from this comparison - things to revisit in the next iteration.
 
 RULES:
 - Be specific. Quote actual numbers/names from both reports when relevant.
 - No hedging filler ("it is important to note", "in conclusion").
 - If B is clearly better-sourced or more current, say so. If A was actually right, say so.
-- Don't manufacture differences where there aren't any — if a dimension is unchanged, note that briefly and move on.
-- Don't write a Sources section — that gets appended automatically.${focusNote}`;
+- Don't manufacture differences where there aren't any - if a dimension is unchanged, note that briefly and move on.
+- Don't write a Sources section - that gets appended automatically.${focusNote}`;
 
-  const user = `REPORT A (${dateA}) — vault key: \`${a.key}\` — title: ${a.title}
+  const user = `REPORT A (${dateA}) - vault key: \`${a.key}\` - title: ${a.title}
 
 \`\`\`
 ${a.content.slice(0, 6000)}
 \`\`\`
 
-REPORT B (${dateB}) — vault key: \`${b.key}\` — title: ${b.title}
+REPORT B (${dateB}) - vault key: \`${b.key}\` - title: ${b.title}
 
 \`\`\`
 ${b.content.slice(0, 6000)}
 \`\`\`
 
-Write the comparison now. Markdown only — no preamble, no postamble.`;
+Write the comparison now. Markdown only - no preamble, no postamble.`;
 
   return await callLLM(sys, user, 3500, [], 90_000);
 }
@@ -162,7 +153,7 @@ export async function handleResearchCompare(name: string, args: unknown): Promis
   const saveToVault = parsed.data.saveToVault ?? true;
 
   if (keyA === keyB) {
-    return { content: [{ type: "text", text: "keyA and keyB are the same — comparison needs two different reports." }], isError: true };
+    return { content: [{ type: "text", text: "keyA and keyB are the same - comparison needs two different reports." }], isError: true };
   }
 
   // Load both reports in parallel
@@ -228,9 +219,9 @@ export async function handleResearchCompare(name: string, args: unknown): Promis
   }
 
   const header = [
-    `📊 **Research Compare** — \`${reportA.key}\` ⇄ \`${reportB.key}\``,
+    `📊 **Research Compare** - \`${reportA.key}\` ⇄ \`${reportB.key}\``,
     compareKey ? `💾 Saved to vault: \`${compareKey}\`` : "",
-    `🧬 Demonstrates cumulative research — your knowledge base is now queryable across time.`,
+    `🧬 Demonstrates cumulative research - your knowledge base is now queryable across time.`,
     ``,
     `<details><summary>📋 Process log</summary>`,
     ``,
