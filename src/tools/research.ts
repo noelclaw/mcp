@@ -9,7 +9,7 @@ export const RESEARCH_TOOLS: Tool[] = [
   {
     name: "web_scrape",
     description:
-      "Fetch and extract clean readable content from any URL — returns markdown. " +
+      "Fetch and extract clean readable content from any URL - returns markdown. " +
       "Use when an agent needs to read an article, docs page, GitHub repo, or any web page. " +
       "Set FIRECRAWL_API_KEY for best quality (firecrawl.dev). Falls back to basic fetch if not set.",
     inputSchema: {
@@ -24,8 +24,9 @@ export const RESEARCH_TOOLS: Tool[] = [
   {
     name: "web_search",
     description:
-      "Search the web and get clean results: titles, URLs, and content snippets. " +
-      "Use for research on any topic, finding recent news, or gathering live information. " +
+      "Search the web and return raw results: titles, URLs, and snippets. No synthesis or analysis — " +
+      "use this for quick lookups, finding sources, or fetching recent news. " +
+      "For multi-source research with LLM synthesis, use deep_research instead. " +
       "Requires FIRECRAWL_API_KEY (firecrawl.dev).",
     inputSchema: {
       type: "object",
@@ -109,7 +110,7 @@ export async function handleResearchTool(name: string, args: unknown): Promise<T
     if (!content) content = await basicFetch(url);
 
     if (!content) {
-      return { content: [{ type: "text", text: `Could not fetch ${url} — page may require JavaScript or block crawlers.` }], isError: true };
+      return { content: [{ type: "text", text: `Could not fetch ${url} - page may require JavaScript or block crawlers.` }], isError: true };
     }
 
     const focusNote = focus ? `\n\n_Focus: ${focus}_\n\n` : "\n\n";
@@ -176,7 +177,7 @@ export async function handleResearchTool(name: string, args: unknown): Promise<T
       return { content: [{ type: "text", text: `No results found for: "${query}"` }] };
     }
 
-    const lines = [`🔍 **Web Search: "${query}"** — ${safeResults.length} results\n`];
+    const lines = [`🔍 **Web Search: "${query}"** - ${safeResults.length} results\n`];
     for (const r of safeResults) {
       lines.push(`**${r.title ?? r.url}**`);
       lines.push(r.url);

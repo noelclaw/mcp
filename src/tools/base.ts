@@ -6,9 +6,9 @@ const MOONWELL_API = "https://api.moonwell.fi/v1/markets";
 
 export const BASE_TOOLS: Tool[] = [
   {
-    name: "base_query_vaults",
+    name: "base_mcp_yield_vaults",
     description:
-      "Find the best yield/earning opportunities on Base chain using Morpho vaults. Use this when the user asks about yield farming, APY, best rates to earn, where to put USDC, or passive income on Base.",
+      "Find the best yield/earning opportunities on Base chain using Morpho vaults. Returns all vaults ranked by APY — use this when the user asks about yield farming, APY, best rates to earn, where to put USDC, or passive income on Base. For yield on a specific token, also see base_mcp_lend.",
     inputSchema: {
       type: "object",
       properties: {
@@ -25,9 +25,9 @@ export const BASE_TOOLS: Tool[] = [
     },
   },
   {
-    name: "base_list_markets",
+    name: "base_mcp_lending_rates",
     description:
-      "Get lending and borrowing rates on Base chain via Moonwell. Use this when the user asks about borrow rates, lending rates, interest rates, supply APY, or how much they can earn/pay lending on Base.",
+      "Get lending and borrowing rates across all Moonwell markets on Base. Returns supply APY, borrow APY, liquidity, and utilization per asset. Use when the user asks about borrow rates, lending rates, interest rates, or supply APY on Base.",
     inputSchema: {
       type: "object",
       properties: {
@@ -40,9 +40,9 @@ export const BASE_TOOLS: Tool[] = [
     },
   },
   {
-    name: "base_prepare_deposit",
+    name: "base_mcp_deposit_guide",
     description:
-      "Get deposit instructions for a Morpho vault — shows the vault address, expected APY, and step-by-step instructions. Does NOT execute the transaction.",
+      "Get step-by-step deposit instructions for a Morpho vault — shows the vault address, expected APY, and manual deposit steps. Does NOT execute the transaction. Call base_mcp_yield_vaults first to find the vault, then call this to get instructions.",
     inputSchema: {
       type: "object",
       properties: {
@@ -63,9 +63,9 @@ export const BASE_TOOLS: Tool[] = [
     },
   },
   {
-    name: "base_chain_stats",
+    name: "base_mcp_network",
     description:
-      "Get real-time Base chain stats: current ETH price in USD, gas price in gwei, and latest block number. Use this when the user asks about gas fees, ETH price, Base network status, or current block.",
+      "Get real-time Base network stats: ETH price in USD, gas price in gwei, and latest block number. Use when the user asks about gas fees, ETH price, Base network status, or current block. Does not require wallet auth.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -170,7 +170,7 @@ async function fetchMoonwellMarkets(asset?: string): Promise<string> {
     const supplyApy = pct((m.baseSupplyApy ?? m.supplyApy ?? m.supplyRate ?? 0) / 100);
     const borrowApy = pct((m.baseBorrowApy ?? m.borrowApy ?? m.borrowRate ?? 0) / 100);
     const liquidity = fmt(m.totalSupplyUsd ?? m.liquidityUsd ?? m.totalSupply ?? 0);
-    const util      = m.utilization != null ? `${(m.utilization * 100).toFixed(1)}%` : "—";
+    const util      = m.utilization != null ? `${(m.utilization * 100).toFixed(1)}%` : "-";
     return `${i + 1}. ${symbol}\n   Supply APY: ${supplyApy}  Borrow APY: ${borrowApy}  Liquidity: ${liquidity}  Util: ${util}`;
   });
 
@@ -202,11 +202,11 @@ async function fetchBaseStats(): Promise<string> {
     }).then(r => r.json() as Promise<any>).catch(() => null),
   ]);
 
-  const block    = blockRes?.result ? parseInt(blockRes.result, 16) : "—";
-  const ethPrice = priceRes?.ethereum?.usd ?? "—";
+  const block    = blockRes?.result ? parseInt(blockRes.result, 16) : "-";
+  const ethPrice = priceRes?.ethereum?.usd ?? "-";
   const gasPriceGwei = gasRes?.result
     ? (parseInt(gasRes.result, 16) / 1e9).toFixed(4)
-    : "—";
+    : "-";
 
   return `Base Chain Stats:\n\n• ETH Price: $${ethPrice}\n• Gas Price: ${gasPriceGwei} gwei\n• Latest Block: ${block.toLocaleString()}\n• Network: Base Mainnet (Chain ID 8453)`;
 }
@@ -257,7 +257,7 @@ async function prepareDeposit(vaultName: string | undefined, asset: string, amou
   // Take best APY vault
   const vault = vaults[0];
   if (!vault) {
-    return `No Morpho vault found for ${asset} on Base. Try base_query_vaults to see available vaults.`;
+    return `No Morpho vault found for ${asset} on Base. Try base_mcp_yield_vaults to see available vaults.`;
   }
 
   const apy = pct(vault.state?.netApy ?? vault.state?.apy ?? 0);
@@ -289,22 +289,22 @@ export async function handleBaseTool(name: string, args: unknown): Promise<ToolR
   const a = (args ?? {}) as Record<string, any>;
 
   switch (name) {
-    case "base_query_vaults": {
+    case "base_mcp_yield_vaults": {
       const text = await fetchMorphoVaults(a.asset, a.limit ?? 10);
       return { content: [{ type: "text", text }] };
     }
 
-    case "base_list_markets": {
+    case "base_mcp_lending_rates": {
       const text = await fetchMoonwellMarkets(a.asset);
       return { content: [{ type: "text", text }] };
     }
 
-    case "base_prepare_deposit": {
+    case "base_mcp_deposit_guide": {
       const text = await prepareDeposit(a.vaultName, a.asset, a.amount);
       return { content: [{ type: "text", text }] };
     }
 
-    case "base_chain_stats": {
+    case "base_mcp_network": {
       const text = await fetchBaseStats();
       return { content: [{ type: "text", text }] };
     }

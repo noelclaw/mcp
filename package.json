@@ -1,7 +1,7 @@
 {
   "name": "@noelclaw/mcp",
-  "version": "3.17.1",
-  "description": "Noelclaw AI Operating System — persistent memory, multi-agent swarm, DeFi execution, market intelligence, and Sentinel-gated playbooks.",
+  "version": "3.27.0",
+  "description": "The runtime layer for Agentic AI. 102 MCP tools: persistent memory, autonomous agents, vault storage, and scheduled workflows — works in Claude Code, Cursor, Windsurf, Codex, Aeon, Antigravity, and any MCP-compatible client.",
   "main": "dist/index.js",
   "bin": {
     "noelclaw-mcp": "dist/index.js",
@@ -16,15 +16,21 @@
   },
   "keywords": [
     "mcp",
-    "ai",
-    "agent",
-    "memory",
+    "mcp-server",
+    "model-context-protocol",
+    "ai-agent",
+    "autonomous-agents",
+    "persistent-memory",
+    "memory-layer",
+    "vault",
+    "agentic",
+    "workflow-automation",
+    "claude-code",
+    "cursor",
+    "windsurf",
     "noelclaw",
     "research",
-    "automation",
-    "claude",
-    "cursor",
-    "windsurf"
+    "automation"
   ],
   "repository": {
     "type": "git",

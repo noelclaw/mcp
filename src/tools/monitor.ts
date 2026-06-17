@@ -9,7 +9,7 @@ const MONITOR_TASK_ID = "noelclaw-monitor";
 const MONITOR_INPUT_SCHEMA = {
   type: "object" as const,
   properties: {
-    topic:    { type: "string", description: "What to research — topic, keyword, or question" },
+    topic:    { type: "string", description: "What to research - topic, keyword, or question" },
     schedule: {
       type: "string",
       description: "Cron expression or preset. Presets: 'daily-8am', 'daily-6pm', 'weekly-monday', 'hourly'. Or raw cron: '0 8 * * *'",
@@ -23,23 +23,15 @@ export const MONITOR_TOOLS: Tool[] = [
   {
     name: "schedule_research",
     description:
-      "Schedule recurring autonomous research on any topic — runs on a cron schedule, saves findings to vault, " +
+      "Schedule recurring autonomous research on any topic - runs on a cron schedule, saves findings to vault, " +
       "and sends a Telegram notification. The agent runs completely on its own with no prompting needed. " +
       "Requires TRIGGER_SECRET_KEY env var (trigger.dev). " +
       "Examples: daily morning briefing, weekly competitor analysis, hourly price alerts, monthly industry report.",
     inputSchema: MONITOR_INPUT_SCHEMA,
   },
   {
-    name: "create_monitor",
-    description:
-      "(Alias for schedule_research — prefer schedule_research for new usage.) " +
-      "Set up a recurring autonomous monitor — runs on a schedule, researches a topic, saves findings to vault, " +
-      "and sends a Telegram notification.",
-    inputSchema: MONITOR_INPUT_SCHEMA,
-  },
-  {
     name: "list_monitors",
-    description: "List all active scheduled research monitors — shows topic, schedule, next run, and monitor ID.",
+    description: "List all active scheduled research monitors - shows topic, schedule, next run, and monitor ID.",
     inputSchema: { type: "object", properties: {}, required: [] },
   },
   {
@@ -87,7 +79,7 @@ function noKeyMsg(): ToolResult {
         `3. Add to your MCP config env block: \`"TRIGGER_SECRET_KEY": "tr_prod_..."\``,
         `4. In the noelclaw worker directory, run: \`npx trigger.dev@latest deploy\``,
         ``,
-        `Then monitors will run autonomously — no chat needed.`,
+        `Then monitors will run autonomously - no chat needed.`,
       ].join("\n"),
     }],
     isError: true,
@@ -108,7 +100,7 @@ export async function handleMonitorTool(name: string, args: unknown): Promise<To
     const { topic, schedule, label } = parsed.data;
     const cron = resolveCron(schedule);
 
-    // Dedup gate — reject if the user already has a monitor with the exact
+    // Dedup gate - reject if the user already has a monitor with the exact
     // same topic + schedule combo. Stops "track AI news daily" from being
     // created 4× by an over-eager agent loop, which is what produced the
     // duplicate Telegram briefings users complained about.
@@ -160,11 +152,11 @@ export async function handleMonitorTool(name: string, args: unknown): Promise<To
         };
       }
     } catch {
-      // Dedup check failed (auth or network) — continue, better to allow than
+      // Dedup check failed (auth or network) - continue, better to allow than
       // block on infrastructure errors.
     }
 
-    // Unique stable ID — worker reads config from vault using this as key
+    // Unique stable ID - worker reads config from vault using this as key
     const externalId = `monitor-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
     try {
@@ -212,7 +204,7 @@ export async function handleMonitorTool(name: string, args: unknown): Promise<To
             ``,
             configSaved
               ? `The agent will research "${topic}" on schedule, save findings to vault, and send a Telegram notification if configured.`
-              : `⚠️ Monitor schedule created but config save failed — the agent may use a default topic on first run. Try \`cancel_monitor\` and recreate.`,
+              : `⚠️ Monitor schedule created but config save failed - the agent may use a default topic on first run. Try \`cancel_monitor\` and recreate.`,
             `Use \`list_monitors\` to see all active monitors.`,
           ].filter(Boolean).join("\n"),
         }],
@@ -260,15 +252,15 @@ export async function handleMonitorTool(name: string, args: unknown): Promise<To
                 const parsed = JSON.parse(cfg.content);
                 configMap.set(s.externalId, { topic: parsed.topic, label: parsed.label ?? parsed.topic });
               }
-            } catch { /* skip — show raw externalId */ }
+            } catch { /* skip - show raw externalId */ }
           })
       );
 
-      const lines = [`📋 **Active Monitors** — ${schedules.length} running\n`];
+      const lines = [`📋 **Active Monitors** - ${schedules.length} running\n`];
       for (const s of schedules) {
         const cfg = s.externalId ? configMap.get(s.externalId) : undefined;
         const label = cfg?.label ?? s.externalId ?? s.id;
-        const topic = cfg?.topic ? ` — ${cfg.topic}` : "";
+        const topic = cfg?.topic ? ` - ${cfg.topic}` : "";
         const next = s.nextRun ? new Date(s.nextRun).toUTCString() : "unknown";
         lines.push(`**${label}**${topic}`);
         lines.push(`  ID: \`${s.id}\` · Cron: \`${s.cron}\` · Next: ${next}`);
