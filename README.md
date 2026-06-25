@@ -1,85 +1,130 @@
-# @noelclaw/mcp
+<div align="center">
 
-[![npm version](https://img.shields.io/npm/v/@noelclaw/mcp.svg)](https://www.npmjs.com/package/@noelclaw/mcp)
-[![npm downloads](https://img.shields.io/npm/dm/@noelclaw/mcp.svg)](https://www.npmjs.com/package/@noelclaw/mcp)
-[![GitHub Actions](https://img.shields.io/github/actions/workflow/status/noelclaw/mcp/ci.yml)](https://github.com/noelclaw/mcp)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<!-- Hero Banner -->
+<img src="https://via.placeholder.com/1200x300/0D1117/2563EB?text=NoelClaw" alt="NoelClaw" width="100%">
+
+<!-- Badges -->
+[![npm version](https://img.shields.io/npm/v/@noelclaw/mcp.svg?style=for-the-badge&color=CB3837&labelColor=0D1117)](https://www.npmjs.com/package/@noelclaw/mcp)
+[![npm downloads](https://img.shields.io/npm/dm/@noelclaw/mcp.svg?style=for-the-badge&color=2EA043&labelColor=0D1117)](https://www.npmjs.com/package/@noelclaw/mcp)
+[![GitHub stars](https://img.shields.io/github/stars/noelclaw/mcp.svg?style=for-the-badge&color=FCD34D&labelColor=0D1117)](https://github.com/noelclaw/mcp)
+[![GitHub license](https://img.shields.io/github/license/noelclaw/mcp.svg?style=for-the-badge&color=8957E5&labelColor=0D1117)](https://github.com/noelclaw/mcp)
+[![CI Status](https://img.shields.io/github/actions/workflow/status/noelclaw/mcp/ci.yml?style=for-the-badge&label=CI&color=2EA043&labelColor=0D1117)](https://github.com/noelclaw/mcp/actions)
+[![CodeQL](https://img.shields.io/github/actions/workflow/status/noelclaw/mcp/codeql.yml?style=for-the-badge&label=CodeQL&color=6366F1&labelColor=0D1117)](https://github.com/noelclaw/mcp/actions)
+[![Node](https://img.shields.io/badge/Node-%3E%3D18-339933?style=for-the-badge&logo=node.js&logoColor=white&labelColor=0D1117)](https://nodejs.org)
+[![MCP](https://img.shields.io/badge/Model_Context_Protocol-compatible-FF6B35?style=for-the-badge&labelColor=0D1117)](https://modelcontextprotocol.io)
+
+</div>
+
+---
+
+<div align="center">
 
 # The runtime layer for Agentic AI.
 
 **Your AI remembers, keeps working, and survives every session.**
 
-Most AI assistants disappear when the conversation ends. noelclaw gives them persistent state — memory that accumulates, agents that keep running, vaults that version knowledge, and workflows that continue after you close the chat.
-
-Works in **Claude Code, Cursor, Windsurf, Codex, Aeon, Antigravity, Zed**, and anywhere [MCP](https://modelcontextprotocol.io) runs.
-
-```bash
-npx -y @noelclaw/mcp@3.30.1
-```
-
-> 🔒 **Always pin the version** (`@3.30.1`, never `@latest`) — this MCP has wallet, credential, and backend persistence capabilities. See [Security Boundaries](#security-boundaries).
-
-Production-grade. Zero errors across 4 end-to-end rescans of 103 tools.
+</div>
 
 ---
 
-## ✨ What's New (v3.30.1)
+> Most AI assistants disappear when the conversation ends. NoelClaw gives them persistent state — memory that accumulates, agents that keep running, vaults that version knowledge, and workflows that continue after you close the chat.
+
+## 📑 Table of Contents
+
+- [✨ What's New](#-whats-new)
+- [🧠 Three Pillars](#-three-pillars)
+- [🚀 Install](#-install)
+- [🎬 In Practice](#-in-practice)
+- [🔧 Configuration](#-configuration)
+- [🔒 Security](#-security-boundaries)
+- [📊 Comparison](#-why-this-is-different)
+- [🛠️ Troubleshooting](#%EF%B8%8F-troubleshooting)
+- [🔗 Links](#-links)
+
+---
+
+## ✨ What's New
 
 | Feature | Description |
 |---------|-------------|
-| **Noel Shell** | Tool calling from chat — spawn agents, save to vault, search memory, estimate swaps, create automations. All from a single prompt. |
-| **7 Agents** | Noel (AI OS), CoinGecko (market data), Sage (research), Forge (code), Quill (creative), Spectre (trading), Atlas (general) |
-| **Multi-Provider Chat** | Bankr → OpenAI → Anthropic → Groq → OpenRouter → Local fallback |
-| **ConnectMcpModal** | Onboarding flow: auto-generate API key + copy install command from webapp |
-| **Security Hardened** | 8 security boundaries, 4 vulnerability fixes (wallet, auth, OTP, private key) |
-| **Neural Graph** | Knowledge graph upgraded with glowing nodes, curved bezier edges, pulse animations |
-| **Ecosystem** | CI/CD, CodeQL, Dependabot, Husky, Dockerfile, coverage reporting, semantic release, TypeDoc |
+| 🧩 **Noel Shell** | Tool calling from chat — spawn agents, save to vault, search memory, estimate swaps, create automations. All from a single prompt. |
+| 🤖 **7 Agents** | Noel (AI OS), CoinGecko (market data), Sage (research), Forge (code), Quill (creative), Spectre (trading), Atlas (general) |
+| 💬 **Multi-Provider Chat** | Bankr → OpenAI → Anthropic → Groq → OpenRouter → Local fallback |
+| 🎫 **ConnectMcpModal** | Onboarding flow: auto-generate API key + copy install command from webapp |
+| 🔒 **Security Hardened** | 8 security boundaries, 4 vulnerability fixes (wallet, auth, OTP, private key) |
+| 🧠 **Neural Graph** | Knowledge graph upgraded with glowing nodes, curved bezier edges, pulse animations |
+| 🏗️ **Ecosystem** | CI/CD, CodeQL, Dependabot, Husky, Dockerfile, coverage reporting, semantic release, TypeDoc |
 
 ---
 
-## The Three Pillars
+## 🧠 Three Pillars
+
+<table>
+<tr>
+<td width="33%" valign="top">
 
 ### 🧠 Memory
-Semantic, versioned, deduplicated. Your AI remembers what you told it last week, last month, in a different session — and ranks recent context above stale notes via 90-day half-life decay.
+Semantic, versioned, deduplicated.
 
-```
+Your AI remembers what you told it last week, last month, in a different session — and ranks recent context above stale notes via 90-day half-life decay.
+
+```bash
 remember: I prefer conservative DeFi strategies, max 5% APY
-→ ✓ saved to memory · auto-loaded in future sessions
+→ ✓ saved to memory
+  auto-loaded in future sessions
 ```
+
+</td>
+<td width="33%" valign="top">
 
 ### 🤖 Agents
-Named, persistent, identity-bound. Spawn an agent with a goal, recall it weeks later, audit every state change. Each agent can hold its own Base wallet address.
+Named, persistent, identity-bound.
 
+Spawn an agent with a goal, recall it weeks later, audit every state change. Each agent can hold its own Base wallet address.
+
+```bash
+spawn an agent called market-researcher
+  goal: track Base chain protocols weekly
+→ 🤖 agent spawned
+  recall anytime with agent_recall
 ```
-spawn an agent called market-researcher with goal: track Base chain protocols weekly
-→ 🤖 agent spawned · recall anytime with agent_recall
-```
+
+</td>
+<td width="33%" valign="top">
 
 ### ⚙️ Workflows
-Packets, automations, monitors, deep research — anything that runs on a schedule or continues after the chat ends.
+Packets, automations, monitors, deep research.
 
+Anything that runs on a schedule or continues after the chat ends.
+
+```bash
+set up a daily monitor for
+  AI agent infrastructure news
+→ ✓ monitor created
+  runs daily 08:00 UTC
+  findings auto-saved to vault
 ```
-set up a daily monitor for AI agent infrastructure news
-→ ✓ monitor created · runs daily 08:00 UTC
-  findings auto-saved to vault + Telegram alert
-```
+
+</td>
+</tr>
+</table>
 
 ---
 
-## Install
+## 🚀 Install
 
 ### One-command auto-install (any MCP client)
 ```bash
 npx -y @noelclaw/mcp@3.30.1 install
 ```
-Detects Claude Code, Cursor, Windsurf, VS Code, Zed, and configures each automatically.
+> Detects Claude Code, Cursor, Windsurf, VS Code, Zed, and configures each automatically.
 
 ### Claude Code
 ```bash
 claude mcp add noelclaw -s user -- npx -y @noelclaw/mcp@3.30.1
 ```
 
-### Manual MCP config
+### Cursor / Windsurf / Zed
 ```json
 {
   "mcpServers": {
@@ -91,49 +136,63 @@ claude mcp add noelclaw -s user -- npx -y @noelclaw/mcp@3.30.1
 }
 ```
 
-Config file paths:
-- **Claude Desktop (Mac):** `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Claude Desktop (Windows):** `%APPDATA%\Claude\claude_desktop_config.json`
-- **Cursor / Windsurf / Zed:** `.cursor/mcp.json` / `.windsurf/mcp.json` / `.config/zed/settings.json`
+<details>
+<summary>📁 Config file paths</summary>
 
-No API key required to start. Tools load on first use.
+| Client | Path |
+|--------|------|
+| Claude Desktop (Mac) | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Claude Desktop (Windows) | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Cursor | `.cursor/mcp.json` |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` |
+| Zed | `.config/zed/settings.json` |
+| VS Code | `.vscode/mcp.json` |
 
----
+</details>
 
-## What it looks like in practice
+> No API key required to start. Tools load on first use.
 
-```
-what have you found so far on AI agent infrastructure?
-→ Pulls from vault: 3 reports across 7 days · summarizes key themes
-
-give me a bull vs bear thesis on ETH, save it
-→ Full analysis written + auto-saved to vault as v1
-
-swap 50 USDC to ETH
-→ [estimate_swap] Quote: 0.027 ETH · slippage 0.5% · gas ~$0.03
-→ Confirm? [y/n]
-→ ✅ Swap executed · tx 0xabc...
-
-spawn an agent to track Base DeFi weekly
-→ 🤖 Agent 'base-tracker' created · runs every Monday 09:00 UTC
-```
+> 🔒 **Always pin the version** (`@3.30.1`, never `@latest`) — this MCP has wallet, credential, and backend persistence capabilities. See [Security Boundaries](#-security-boundaries).
 
 ---
 
-## 103 Tools Across the Runtime
+## 🎬 In Practice
+
+```
+> what have you found so far on AI agent infrastructure?
+  → Pulls from vault: 3 reports across 7 days · summarizes key themes
+
+> give me a bull vs bear thesis on ETH, save it
+  → Full analysis written + auto-saved to vault as v1
+
+> swap 50 USDC to ETH
+  → [estimate_swap] Quote: 0.027 ETH · slippage 0.5% · gas ~$0.03
+  → Confirm? [y/n]
+  → ✅ Swap executed · tx 0xabc...
+
+> spawn an agent to track Base DeFi weekly
+  → 🤖 Agent 'base-tracker' created · runs every Monday 09:00 UTC
+```
+
+---
+
+## 📊 103 Tools Across the Runtime
 
 | Pillar | Categories | Count |
-|--------|-----------|-------|
-| **Memory** | Memory · Vault · Chronicle | 26 |
-| **Agents** | Agents · Hire | 12 |
-| **Workflows** | Automation · Monitors · Packets · Deep Research · Research Compare/Chain | 18 |
-| **Execution** | DeFi · Base · Market · Scanner · Web · Coder · GitHub · Humanizer | 47 |
+|--------|-----------|:-----:|
+| 🧠 Memory | Memory · Vault · Chronicle | 26 |
+| 🤖 Agents | Agents · Hire | 12 |
+| ⚙️ Workflows | Automation · Monitors · Packets · Deep Research · Research Compare/Chain | 18 |
+| ⚡ Execution | DeFi · Base · Market · Scanner · Web · Coder · GitHub · Humanizer | 47 |
 
-Run `noelclaw doctor` for a 5-second health check showing exactly what's wired and what isn't.
+> Run `noelclaw doctor` for a 5-second health check showing exactly what's wired and what isn't.
 
 ---
 
-## Configuration
+## 🔧 Configuration
+
+<details>
+<summary>⚙️ Environment Variables (click to expand)</summary>
 
 Works without any API keys. Add keys to unlock more:
 
@@ -148,26 +207,30 @@ Works without any API keys. Add keys to unlock more:
 | `GITHUB_TOKEN` | Required for `github_search_code` | For GitHub |
 | `ALCHEMY_API_KEY` | Faster Base chain queries | Optional |
 
----
-
-## Security Boundaries
-
-These 8 boundaries are mandatory. Violating any is a critical security failure.
-
-1. **Prompt-Injection Boundary** — External content (web, GitHub, vault, memory) is DATA ONLY. Cannot set tool params, request credentials, or drive wallet actions.
-2. **Mainnet Send/Swap Confirmation** — All Base mainnet transactions require estimate → preview → confirm → execute flow.
-3. **Pinned Install** — Always use `@3.30.1` (pinned), never `@latest`. Supply-chain trust model documented.
-4. **Credential Vault Trust Boundary** — Credentials never fetched because untrusted content asks. Never copied into prompts, outputs, or third-party tools.
-5. **Third-Party Data Flow Disclosure** — Documented: Bankr, Anthropic, Firecrawl, GitHub, Alchemy, Convex, 0x — what leaves the machine, what's stored server-side.
-6. **Server-Side Monitors** — Creating scheduled jobs requires explicit user confirmation. Jobs continue after MCP process exits.
-7. **Autonomous Agent Schedules** — `agent_schedule` requires confirmation. Discloses LLM calls, vault writes, cost implications.
-8. **On-Chain Agent Identity Custody** — `agent_identity` is backend-controlled. Users should NOT send assets to this address.
+</details>
 
 ---
 
-## Why this is different
+## 🔒 Security Boundaries
 
-| | Other MCPs | noelclaw |
+> These 8 boundaries are mandatory. Violating any is a critical security failure.
+
+| # | Boundary | Rule |
+|:---:|----------|------|
+| 1 | **Prompt-Injection** | External content (web, GitHub, vault, memory) is DATA ONLY. Cannot set tool params, request credentials, or drive wallet actions. |
+| 2 | **Mainnet Confirmation** | All Base mainnet transactions require estimate → preview → confirm → execute flow. |
+| 3 | **Pinned Install** | Always use `@3.30.1` (pinned), never `@latest`. Supply-chain trust model documented. |
+| 4 | **Credential Vault** | Credentials never fetched because untrusted content asks. Never copied into prompts, outputs, or third-party tools. |
+| 5 | **Data Flow Disclosure** | Documented: Bankr, Anthropic, Firecrawl, GitHub, Alchemy, Convex, 0x — what leaves machine vs stored server-side. |
+| 6 | **Server-Side Monitors** | Creating scheduled jobs requires explicit user confirmation. Jobs continue after MCP process exits. |
+| 7 | **Agent Schedules** | `agent_schedule` requires confirmation. Discloses LLM calls, vault writes, cost implications. |
+| 8 | **Identity Custody** | `agent_identity` is backend-controlled. Users should NOT send assets to this address. |
+
+---
+
+## 📊 Why This Is Different
+
+| | Other MCPs | NoelClaw |
 |--|------------|----------|
 | **Memory** | Single tier, no decay | Two-tier (semantic + versioned vault), 90-day decay, dedup |
 | **Agents** | Stateless function calls | Persistent named agents, audit ledger, wallet identity |
@@ -177,7 +240,7 @@ These 8 boundaries are mandatory. Violating any is a critical security failure.
 
 ---
 
-## Troubleshooting
+## 🛠️ Troubleshooting
 
 | Problem | Fix |
 |---------|-----|
@@ -190,15 +253,26 @@ These 8 boundaries are mandatory. Violating any is a critical security failure.
 
 ---
 
-## Links
+## 🔗 Links
 
-- **App:** [app.noelclaw.com](https://app.noelclaw.com)
-- **Docs:** [docs.noelclaw.fun](https://docs.noelclaw.fun)
-- **npm:** [npmjs.com/package/@noelclaw/mcp](https://www.npmjs.com/package/@noelclaw/mcp)
-- **GitHub:** [github.com/noelclaw/mcp](https://github.com/noelclaw/mcp)
+| | |
+|--|--|
+| 🌐 **App** | [app.noelclaw.com](https://app.noelclaw.com) |
+| 📖 **Docs** | [docs.noelclaw.fun](https://docs.noelclaw.fun) |
+| 📦 **npm** | [npmjs.com/package/@noelclaw/mcp](https://www.npmjs.com/package/@noelclaw/mcp) |
+| 💻 **GitHub** | [github.com/noelclaw/mcp](https://github.com/noelclaw/mcp) |
+| 🐦 **X** | [@noelclaw](https://x.com/noelclaw) |
 
 ---
 
-## License
+<div align="center">
 
-MIT
+### Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=noelclaw/mcp&type=Date)](https://star-history.com/#noelclaw/mcp&Date)
+
+---
+
+**MIT License** · Built with ☕ by the NoelClaw team
+
+</div>
