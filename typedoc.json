@@ -1,0 +1,17 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts"],
+  "out": "docs/",
+  "theme": "default",
+  "readme": "README.md",
+  "exclude": [
+    "**/test/**",
+    "**/tests/**",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "node_modules/**"
+  ],
+  "includePrivate": false,
+  "excludePrivate": true,
+  "excludeProtected": true
+}

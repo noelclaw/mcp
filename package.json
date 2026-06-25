@@ -11,8 +11,11 @@
     "build": "tsc",
     "dev": "ts-node src/index.ts",
     "start": "node dist/index.js",
-    "prepare": "npm run build",
+    "prepare": "husky",
     "prepublishOnly": "npm run build"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": "eslint --fix"
   },
   "keywords": [
     "mcp",
@@ -54,6 +57,8 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.10",
     "ts-node": "^10.9.2",
     "typescript": "^5.0.0"
   },
