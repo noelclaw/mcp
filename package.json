@@ -1,7 +1,7 @@
 {
   "name": "@noelclaw/mcp",
-  "version": "3.29.0",
-  "description": "The runtime layer for Agentic AI. 102 MCP tools: persistent memory, autonomous agents, vault storage, and scheduled workflows — works in Claude Code, Cursor, Windsurf, Codex, Aeon, Antigravity, and any MCP-compatible client.",
+  "version": "3.30.0",
+  "description": "The runtime layer for Agentic AI. 103 MCP tools: persistent memory, autonomous agents, vault storage, scheduled workflows, DeFi execution on Base, deep research, and Noel Shell tool calling — works in Claude Code, Cursor, Windsurf, Codex, Aeon, Antigravity, and any MCP-compatible client.",
   "main": "dist/index.js",
   "bin": {
     "noelclaw-mcp": "dist/index.js",
@@ -33,7 +33,14 @@
     "windsurf",
     "noelclaw",
     "research",
-    "automation"
+    "automation",
+    "defi",
+    "base-chain",
+    "tool-calling",
+    "noel-shell",
+    "ai-terminal",
+    "knowledge-graph",
+    "semantic-search"
   ],
   "repository": {
     "type": "git",
