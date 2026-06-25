@@ -4,6 +4,8 @@ import { ToolResult } from "../types.js";
 import { getTier } from "../token-gate.js";
 import { getOrCreateWallet } from "../wallet.js";
 
+const CONVEX_SITE = process.env.NOELCLAW_CONVEX_URL ?? "https://api.noelclaw.com";
+
 export const OS_TOOLS: Tool[] = [
   {
     name: "noel_status",
@@ -12,6 +14,19 @@ export const OS_TOOLS: Tool[] = [
       "execution scores, and your tier. Like `htop` for your AI runtime. " +
       "Run this to see what's running and what state your runtime is currently holding.",
     inputSchema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "noel_shell_chat",
+    description:
+      "Chat with Noel Shell — AI terminal with tool calling. Can spawn agents, save to vault, search memory, create automations, estimate swaps, list agents, and get wallet balance — all from a single prompt.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        message: { type: "string", description: "Your message or instruction to Noel Shell." },
+        agent_id: { type: "string", description: "Optional: specific agent ID to chat with (default: noel-default)." },
+      },
+      required: ["message"],
+    },
   },
 ];
 
@@ -92,6 +107,35 @@ export async function handleOsTool(name: string, args: unknown): Promise<ToolRes
       lines.push(`💡 Run \`deep_research query: "..."\` to launch multi-agent research · \`agent_spawn\` to start a persistent agent`);
 
       return { content: [{ type: "text", text: lines.join("\n") }] };
+    }
+
+    case "noel_shell_chat": {
+      const { message, agent_id } = args as { message: string; agent_id?: string };
+      if (!message) return { content: [{ type: "text", text: "Error: message is required" }] };
+      // Route to Convex noelShellChat action
+      try {
+        const res = await fetch(`${CONVEX_SITE}/api/noelShell`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${process.env.NOELCLAW_SESSION_TOKEN ?? ""}`,
+          },
+          body: JSON.stringify({ message, agentId: agent_id ?? "noel-default" }),
+        });
+        if (!res.ok) {
+          return { content: [{ type: "text", text: `Shell chat error: ${res.status} ${res.statusText}` }] };
+        }
+        const data = await res.json() as { response?: string; actions?: unknown[] };
+        let text = data.response ?? "No response from Noel Shell.";
+        if (data.actions && Array.isArray(data.actions) && data.actions.length > 0) {
+          text += "\n\n**Actions taken:**\n" + (data.actions as Array<{ tool?: string; result?: string }>)
+            .map(a => `• \`${a.tool ?? "unknown"}\` → ${a.result ?? "done"}`)
+            .join("\n");
+        }
+        return { content: [{ type: "text", text }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: `Shell chat failed: ${(err as Error).message}` }] };
+      }
     }
 
     default:

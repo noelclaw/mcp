@@ -96,7 +96,7 @@ export const ALL_TOOLS = [
   ...GITHUB_TOOLS,       // 8 - list_repos, list_prs, get_pr, list_issues, get_issue, get_file, get_commits, search_code
   ...CHRONICLE_TOOLS,    // 2 - chronicle_add, chronicle_list
   ...PACKET_TOOLS,       // 4 - packet_create, packet_run, packet_list, packet_share
-  // total: 103 (v3.18: set_telegram -1, autonomous agent_* +5; v3.19: SWARM_TOOLS -5 → folded into deep_research)
+  // total: 103 (v3.30.0: +noel_shell_chat; v3.18: set_telegram -1, autonomous agent_* +5; v3.19: SWARM_TOOLS -5 → folded into deep_research)
 ];
 
 // Build O(1) dispatch map at startup - avoids sequential chained awaits per call
