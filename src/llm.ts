@@ -1,4 +1,5 @@
 import { signRequest } from "./wallet.js";
+import { readConfig } from "./config.js";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const BANKR_URL = "https://llm.bankr.bot/v1/chat/completions";
@@ -99,11 +100,17 @@ async function callViaConvex(
   const headers: Record<string, string> = { "Content-Type": "application/json" };
 
   const apiKey = process.env.NOELCLAW_API_KEY;
-  const sessionToken = process.env.NOELCLAW_SESSION_TOKEN;
-  if (apiKey) {
-    headers["Authorization"] = `Bearer ${apiKey}`;
-  } else if (sessionToken) {
+  let sessionToken = process.env.NOELCLAW_SESSION_TOKEN;
+  // Read from config file — this is the resolved session token after login
+  try {
+    const cfg = readConfig();
+    if (cfg.sessionToken) sessionToken = cfg.sessionToken;
+  } catch { /* ignore */ }
+  // Prefer session token (resolved by backend) over API key for /mcp/chat
+  if (sessionToken) {
     headers["Authorization"] = `Bearer ${sessionToken}`;
+  } else if (apiKey) {
+    headers["Authorization"] = `Bearer ${apiKey}`;
   } else {
     try {
       const { address, signature, timestamp } = await signRequest("ask_noel");

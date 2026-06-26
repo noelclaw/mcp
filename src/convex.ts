@@ -33,10 +33,11 @@ export async function callConvex(path: string, method: string, body?: unknown, t
 
   const apiKey      = process.env.NOELCLAW_API_KEY;
   const sessionToken = getSavedToken(); // env var → saved config fallback
-  const authHeader  = apiKey
-    ? `Bearer ${apiKey}`
-    : sessionToken
+  // Prefer session token (resolved by backend) over API key for Convex API calls
+  const authHeader  = sessionToken
     ? `Bearer ${sessionToken}`
+    : apiKey
+    ? `Bearer ${apiKey}`
     : null;
   if (authHeader) {
     headers["Authorization"] = authHeader;
