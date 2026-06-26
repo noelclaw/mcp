@@ -858,7 +858,7 @@ if (cmd === "install") {
             body: JSON.stringify({ apiKey: envKey }),
         })
             .then(res => res.json())
-            .then((data) => {
+            .then((data: any) => {
                 if (data.token) {
                     const email = data.email ?? "api-key-user";
                     const name = data.displayName ?? undefined;
