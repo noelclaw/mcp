@@ -24,7 +24,7 @@ const CORE_TOOL_COUNT = (() => {
   }
 })();
 
-const CONVEX_SITE = process.env.NOELCLAW_CONVEX_URL ?? "https://api.noelclaw.com";
+const CONVEX_SITE = process.env.NOELCLAW_CONVEX_URL ?? "https://befitting-porcupine-276.convex.site";
 
 const PKG_VERSION: string = (() => {
   try {
@@ -825,11 +825,39 @@ if (cmd === "install") {
     process.exit(1);
   });
 } else if (cmd === "login") {
-  loginFlow().catch((err) => {
-    console.error(`  ${C.red}✗ login error: ${err.message}${C.reset}`);
-    process.exit(1);
-  });
-} else if (cmd === "doctor") {
+    const envKey = process.env.NOELCLAW_API_KEY;
+    if (envKey && envKey.startsWith("noel_sk_")) {
+        console.log(`  ${C.dim}Found NOELCLAW_API_KEY in environment${C.reset}`);
+        process.stdout.write(`  Authenticating...`);
+        fetch(`${CONVEX_SITE}/auth/apikey/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ apiKey: envKey }),
+        })
+            .then(res => res.json())
+            .then((data) => {
+                if (data.token) {
+                    const email = data.email ?? "api-key-user";
+                    const name = data.displayName ?? undefined;
+                    writeConfig({ sessionToken: data.token, email, name });
+                    printLoginSuccess({ email, name });
+                    process.exit(0);
+                }
+                console.log(`\n  ${C.red}✗${C.reset} ${data.error ?? "Invalid API key"}\n`);
+                process.exit(1);
+            })
+            .catch((err) => {
+                console.log(`\n  ${C.red}✗${C.reset} Login failed: ${err.message}\n`);
+                process.exit(1);
+            });
+    }
+    else {
+        loginFlow().catch((err) => {
+            console.error(`  ${C.red}✗ login error: ${err.message}${C.reset}`);
+            process.exit(1);
+        });
+    }
+}else if (cmd === "doctor") {
   doctorFlow().catch((err) => {
     console.error(`  ${C.red}✗ doctor error: ${err.message}${C.reset}`);
     process.exit(1);
