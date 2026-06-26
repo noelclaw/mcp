@@ -346,6 +346,29 @@ async function checkForUpdate(): Promise<void> {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
+  // Auto-login from env var if set and not already logged in
+  const cfg = readConfig();
+  const envKey = process.env.NOELCLAW_API_KEY;
+  if (!cfg.sessionToken && envKey && envKey.startsWith("noel_sk_")) {
+    process.stdout.write(`  ${C.dim}Auto-login from NOELCLAW_API_KEY...${C.reset} `);
+    try {
+      const res = await fetch(`${CONVEX_SITE}/auth/apikey/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey: envKey }),
+      });
+      const data = await res.json() as any;
+      if (res.ok && data.token) {
+        writeConfig({ sessionToken: data.token, email: data.email ?? "api-key-user", name: data.displayName ?? undefined });
+        console.log(`${C.green}✓${C.reset} ${C.dim}Signed in as ${data.email}${C.reset}`);
+      } else {
+        console.log(`${C.red}✗${C.reset} ${C.dim}Invalid API key in env var${C.reset}`);
+      }
+    } catch (e) {
+      console.log(`${C.red}✗${C.reset} ${C.dim}Login failed: ${(e as Error).message}${C.reset}`);
+    }
+  }
+
   process.stdout.write(buildBanner());
 
   // Check for updates in background - shows after banner, doesn't block prompt
