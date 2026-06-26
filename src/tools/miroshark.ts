@@ -3,7 +3,7 @@ import { ToolResult } from "../types.js";
 import { callLLM } from "../llm.js";
 import { callConvex } from "../convex.js";
 
-const CONVEX_SITE = process.env.NOELCLAW_CONVEX_URL ?? "https://api.noelclaw.com";
+const CONVEX_SITE = process.env.NOELCLAW_CONVEX_URL ?? "https://befitting-porcupine-276.convex.site";
 
 export const MIROSHARK_TOOLS: Tool[] = [
   {

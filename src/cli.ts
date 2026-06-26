@@ -696,7 +696,7 @@ async function doctorFlow(): Promise<void> {
     checks.push({
       name: "Backend reachable", status: "✗",
       detail: `${CONVEX_SITE} → ${err.message}`,
-      fix: `Network issue or wrong URL. Default: https://api.noelclaw.com`,
+      fix: `Network issue or wrong URL. Default: https://befitting-porcupine-276.convex.site`,
     });
   }
 

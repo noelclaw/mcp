@@ -189,7 +189,7 @@ async function loginFlow() {
   // Earlier versions defaulted to noelclaw.convex.site here, which meant
   // `noelclaw login` could hit a different host than runtime tool calls
   // - confusing when users override one env var.
-  const siteUrl = process.env.NOELCLAW_CONVEX_URL ?? "https://api.noelclaw.com";
+  const siteUrl = process.env.NOELCLAW_CONVEX_URL ?? "https://befitting-porcupine-276.convex.site";
   let authFailed = false;
   try {
     const res = await fetch(`${siteUrl}/auth/me`, {

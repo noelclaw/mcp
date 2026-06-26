@@ -3,7 +3,7 @@ import { signRequest } from "./wallet.js";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const BANKR_URL = "https://llm.bankr.bot/v1/chat/completions";
 const GROK_URL = "https://api.x.ai/v1/chat/completions";
-const CONVEX_SITE = process.env.NOELCLAW_CONVEX_URL ?? "https://api.noelclaw.com";
+const CONVEX_SITE = process.env.NOELCLAW_CONVEX_URL ?? "https://befitting-porcupine-276.convex.site";
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 

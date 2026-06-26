@@ -4,7 +4,7 @@ import { ToolResult } from "../types.js";
 import { getTier } from "../token-gate.js";
 import { getOrCreateWallet } from "../wallet.js";
 
-const CONVEX_SITE = process.env.NOELCLAW_CONVEX_URL ?? "https://api.noelclaw.com";
+const CONVEX_SITE = process.env.NOELCLAW_CONVEX_URL ?? "https://befitting-porcupine-276.convex.site";
 
 export const OS_TOOLS: Tool[] = [
   {

@@ -1,7 +1,7 @@
 import { signRequest } from "./wallet.js";
 import { getSavedToken } from "./config.js";
 
-const CONVEX_SITE = process.env.NOELCLAW_CONVEX_URL ?? "https://api.noelclaw.com";
+const CONVEX_SITE = process.env.NOELCLAW_CONVEX_URL ?? "https://befitting-porcupine-276.convex.site";
 const RETRY_STATUSES = new Set([429, 500, 502, 503, 504]);
 const RETRY_DELAYS = [500, 1000, 2000];
 
