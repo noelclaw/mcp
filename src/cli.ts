@@ -94,8 +94,26 @@ async function loginWithApiKey(rl: readline.Interface): Promise<void> {
   const ask = (q: string) => new Promise<string>(resolve => rl.question(q, resolve));
 
   console.log(`  ${C.dim}Generate an API key at app.noelclaw.com → Settings → API Keys${C.reset}`);
-  const apiKey = (await ask(`  API key (noel_sk_...): `)).trim();
+  console.log(`  ${C.dim}Or set env var: set NOELCLAW_API_KEY=noel_sk_xxx${C.reset}`);
+  let apiKey = (await ask(`  API key (noel_sk_...): `)).trim();
   if (!apiKey) return;
+
+  // Deduplicate doubled input (Clink v1.7.6 bug: "22" → should be "2", "noel_sk_xxnoel_sk_xx" → "noel_sk_xx")
+  // If the string is exactly doubled (first half === second half), take first half
+  if (apiKey.length > 0 && apiKey.length % 2 === 0) {
+    const half = apiKey.length / 2;
+    if (apiKey.slice(0, half) === apiKey.slice(half)) {
+      apiKey = apiKey.slice(0, half);
+    }
+  }
+
+  // Strip any non-ASCII that Clink might inject
+  apiKey = apiKey.replace(/[^\x20-\x7E]/g, "").trim();
+
+  if (!apiKey.startsWith("noel_sk_")) {
+    console.log(`\n  ${C.red}✗${C.reset} API key must start with "noel_sk_". Got: "${apiKey.slice(0, 20)}..."\n`);
+    return;
+  }
 
   process.stdout.write(`  Authenticating...`);
   const res = await fetch(`${CONVEX_SITE}/auth/apikey/login`, {
@@ -119,11 +137,45 @@ async function loginFlow(loginRl?: readline.Interface): Promise<void> {
   const rl = loginRl ?? readline.createInterface({ input: process.stdin, output: process.stdout });
   const ask = (q: string) => new Promise<string>(resolve => rl.question(q, resolve));
 
+  // Check env var first — skip prompt entirely
+  const envKey = process.env.NOELCLAW_API_KEY;
+  if (envKey && envKey.startsWith("noel_sk_")) {
+    console.log(`\n  ${C.dim}Found NOELCLAW_API_KEY in environment — authenticating...${C.reset}`);
+    process.stdout.write(`  Authenticating...`);
+    const res = await fetch(`${CONVEX_SITE}/auth/apikey/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ apiKey: envKey }),
+    });
+    const data = await res.json() as any;
+    if (res.ok && data.token) {
+      const email: string = data.email ?? "api-key-user";
+      const name: string | undefined = data.displayName ?? undefined;
+      writeConfig({ sessionToken: data.token, email, name });
+      printLoginSuccess({ email, name });
+      rl.close();
+      return;
+    }
+    console.log(`\n  ${C.red}✗${C.reset} Env var NOELCLAW_API_KEY is invalid. Falling back to manual login.\n`);
+  }
+
   console.log(`\n  ${C.cyan}${C.bold}Sign in to Noelclaw${C.reset}\n`);
   console.log(`  ${C.dim}[1] Email (OTP code sent to your email)${C.reset}`);
   console.log(`  ${C.dim}[2] API key (from app.noelclaw.com → Settings)${C.reset}\n`);
 
-  const choice = (await ask(`  Choose [1/2]: `)).trim();
+  let choice = (await ask(`  Choose [1/2]: `)).trim();
+
+  // Deduplicate doubled input (Clink bug: "22" → "2")
+  if (choice.length === 2 && choice[0] === choice[1]) {
+    choice = choice[0];
+  }
+  // Also handle longer doubled strings
+  if (choice.length > 0 && choice.length % 2 === 0) {
+    const half = choice.length / 2;
+    if (choice.slice(0, half) === choice.slice(half)) {
+      choice = choice.slice(0, half);
+    }
+  }
 
   if (choice === "2" || choice === "api" || choice === "apikey" || choice === "key") {
     await loginWithApiKey(rl);
