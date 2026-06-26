@@ -115,8 +115,8 @@ async function loginWithApiKey(rl: readline.Interface): Promise<void> {
   printLoginSuccess({ email, name });
 }
 
-async function loginFlow(): Promise<void> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+async function loginFlow(loginRl?: readline.Interface): Promise<void> {
+  const rl = loginRl ?? readline.createInterface({ input: process.stdin, output: process.stdout });
   const ask = (q: string) => new Promise<string>(resolve => rl.question(q, resolve));
 
   console.log(`\n  ${C.cyan}${C.bold}Sign in to Noelclaw${C.reset}\n`);
@@ -125,10 +125,14 @@ async function loginFlow(): Promise<void> {
 
   const choice = (await ask(`  Choose [1/2]: `)).trim();
 
-  if (choice === "2") {
+  if (choice === "2" || choice === "api" || choice === "apikey" || choice === "key") {
     await loginWithApiKey(rl);
-  } else {
+  } else if (choice === "1" || choice === "email" || choice === "otp") {
     await loginWithOtp(rl);
+  } else {
+    console.log(`  ${C.red}Invalid choice. Please enter 1 or 2.${C.reset}\n`);
+    rl.close();
+    return;
   }
 
   rl.close();
@@ -330,7 +334,10 @@ async function main() {
 
     if (line === "/login") {
       rl.pause();
-      await loginFlow();
+      // Create fresh readline for login — reusing rl causes input conflicts
+      const loginRl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      await loginFlow(loginRl);
+      loginRl.close();
       rl.resume();
       rl.prompt();
       return;
